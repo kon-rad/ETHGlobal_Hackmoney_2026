@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { addToWaitlist, isEmailRegistered } from "@/lib/waitlist";
 
 type Status = "idle" | "loading" | "success" | "error";
 
@@ -34,27 +35,24 @@ export function WaitlistCTA() {
     setMessage("");
 
     try {
-      const response = await fetch("/api/waitlist", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setStatus("success");
-        setMessage("You're on the list! We'll be in touch.");
-        setEmail("");
-      } else {
+      // Check for duplicates
+      const alreadyRegistered = await isEmailRegistered(email);
+      if (alreadyRegistered) {
         setStatus("error");
-        setMessage(data.error || "Something went wrong. Please try again.");
+        setMessage("This email is already registered.");
+        return;
       }
-    } catch {
+
+      // Add to Firebase waitlist
+      await addToWaitlist(email);
+
+      setStatus("success");
+      setMessage("You're on the list! We'll be in touch.");
+      setEmail("");
+    } catch (error) {
+      console.error("Waitlist error:", error);
       setStatus("error");
-      setMessage("Network error. Please try again.");
+      setMessage("Something went wrong. Please try again.");
     }
   };
 
