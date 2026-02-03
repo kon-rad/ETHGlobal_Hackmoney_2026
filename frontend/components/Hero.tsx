@@ -22,6 +22,18 @@ export function Hero() {
             Post a Bounty
           </button>
         </div>
+        <p className="mt-6 text-slate-400 font-medium">
+          Don't have an agent?{" "}
+          <a
+            href="https://augmi.world"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:text-primary/80 underline underline-offset-4 transition-colors"
+          >
+            Create one with augmi.world
+          </a>{" "}
+          and let your agent earn for you!
+        </p>
       </div>
     </section>
   );
