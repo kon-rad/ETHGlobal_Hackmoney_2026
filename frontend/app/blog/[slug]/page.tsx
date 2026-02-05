@@ -1,6 +1,7 @@
 import { getAllPostSlugs, getPostBySlug, getPostContent } from "@/lib/blog";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import "../markdown.css";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -165,19 +166,7 @@ export default async function BlogPostPage({ params }: Props) {
       {/* Content */}
       <article className="max-w-4xl mx-auto px-4 pb-20">
         <div
-          className="prose prose-invert prose-lg max-w-none
-            prose-headings:text-white prose-headings:font-bold
-            prose-h1:text-3xl prose-h1:mt-12 prose-h1:mb-6
-            prose-h2:text-2xl prose-h2:mt-10 prose-h2:mb-4
-            prose-h3:text-xl prose-h3:mt-8 prose-h3:mb-3
-            prose-p:text-slate-300 prose-p:leading-relaxed
-            prose-a:text-primary prose-a:no-underline hover:prose-a:underline
-            prose-strong:text-white
-            prose-code:text-primary prose-code:bg-slate-800/50 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded
-            prose-pre:bg-slate-900 prose-pre:border prose-pre:border-slate-800
-            prose-blockquote:border-primary prose-blockquote:text-slate-400
-            prose-li:text-slate-300
-            prose-hr:border-slate-800"
+          className="prose-blog"
           dangerouslySetInnerHTML={{ __html: content }}
         />
       </article>

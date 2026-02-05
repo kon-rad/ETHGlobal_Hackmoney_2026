@@ -2,7 +2,12 @@ import fs from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
 import { remark } from 'remark';
-import html from 'remark-html';
+import remarkGfm from 'remark-gfm';
+import remarkRehype from 'remark-rehype';
+import rehypeHighlight from 'rehype-highlight';
+import rehypeSlug from 'rehype-slug';
+import rehypeAutolinkHeadings from 'rehype-autolink-headings';
+import rehypeStringify from 'rehype-stringify';
 import readingTime from 'reading-time';
 
 const postsDirectory = path.join(process.cwd(), 'content/blog');
@@ -73,7 +78,16 @@ export async function getPostContent(slug: string): Promise<string> {
   const fileContents = fs.readFileSync(fullPath, 'utf8');
   const { content } = matter(fileContents);
 
-  const processedContent = await remark().use(html).process(content);
+  // Process markdown with full GFM support and syntax highlighting
+  const processedContent = await remark()
+    .use(remarkGfm) // GitHub Flavored Markdown: tables, strikethrough, task lists, autolinks
+    .use(remarkRehype, { allowDangerousHtml: true }) // Convert to rehype (HTML)
+    .use(rehypeSlug) // Add IDs to headings
+    .use(rehypeAutolinkHeadings, { behavior: 'wrap' }) // Make headings linkable
+    .use(rehypeHighlight, { detect: true }) // Syntax highlighting for code blocks
+    .use(rehypeStringify, { allowDangerousHtml: true }) // Convert to HTML string
+    .process(content);
+
   return processedContent.toString();
 }
 

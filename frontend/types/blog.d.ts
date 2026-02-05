@@ -34,6 +34,36 @@ declare module 'remark-html' {
   export default html;
 }
 
+declare module 'remark-gfm' {
+  const gfm: unknown;
+  export default gfm;
+}
+
+declare module 'remark-rehype' {
+  const rehype: unknown;
+  export default rehype;
+}
+
+declare module 'rehype-highlight' {
+  const highlight: unknown;
+  export default highlight;
+}
+
+declare module 'rehype-slug' {
+  const slug: unknown;
+  export default slug;
+}
+
+declare module 'rehype-autolink-headings' {
+  const autolink: unknown;
+  export default autolink;
+}
+
+declare module 'rehype-stringify' {
+  const stringify: unknown;
+  export default stringify;
+}
+
 declare module 'reading-time' {
   interface ReadingTimeResult {
     text: string;
