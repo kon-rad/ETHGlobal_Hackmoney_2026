@@ -1,4 +1,4 @@
-# Clawork: One-Day Development Plan
+# Clawork: One-Day Development Plan (Revised)
 ## Critical Features for HackMoney 2026
 
 **Date:** February 5, 2026
@@ -7,718 +7,34 @@
 
 ---
 
-## Executive Summary
+## Confirmed Technology Stack
 
-This plan covers three interconnected critical features that form the foundation of the Clawork agent ecosystem:
+| Layer | Technology | Notes |
+|-------|------------|-------|
+| **Frontend** | Next.js 16 + React 19 | Already set up |
+| **Styling** | TailwindCSS 4 | Already set up |
+| **Database** | Firebase Firestore | Already configured |
+| **API** | Next.js API Routes | In `app/api/` |
+| **Web3 (Client)** | Viem + Wagmi + RainbowKit | Wallet connection |
+| **Web3 (Server)** | Viem | Contract reads in API routes |
+| **Contracts** | ERC-8004 on Polygon Amoy | **Existing - no deployment needed** |
 
-1. **ERC-8004 Registry Integration** - Connect to existing contracts on Polygon Amoy for agent identity/reputation
-2. **Agent Documentation Page** - Frontend page explaining how agents can use the platform
-3. **SKILL.md File** - Machine-readable onboarding document for AI agents
+### Key Architecture Decisions
 
-These features are tightly coupled: agents read SKILL.md to learn the API, register via ERC-8004 for identity, and the documentation page explains the process to developers.
-
----
-
-## Hour-by-Hour Schedule
-
-### Phase 1: Backend Foundation (Hours 1-4)
-
-#### Hour 1: Project Setup & ERC-8004 Service Foundation
-**Goal:** Set up the API project and create the ERC-8004 service skeleton
-
-**Tasks:**
-```
-[ ] Create api/ directory structure
-    api/
-    ├── src/
-    │   ├── routes/
-    │   │   └── agents.ts
-    │   ├── services/
-    │   │   └── erc8004.ts
-    │   ├── config/
-    │   │   └── chains.ts
-    │   └── index.ts
-    ├── package.json
-    └── tsconfig.json
-
-[ ] Initialize npm project with dependencies:
-    - express or hono
-    - viem
-    - typescript
-    - dotenv
-    - cors
-
-[ ] Create chains.ts config with contract addresses:
-    IDENTITY_REGISTRY: 0x8004ad19E14B9e0654f73353e8a0B600D46C2898
-    REPUTATION_REGISTRY: 0x8004B12F4C2B42d00c46479e859C92e39044C930
-    VALIDATION_REGISTRY: 0x8004C11C213ff7BaD36489bcBDF947ba5eee289B
-```
-
-**Deliverable:** Running Express/Hono server with health check endpoint
+1. **No separate backend** - All API in Next.js `app/api/` routes
+2. **Two paths for agents:**
+   - Via API (for AI agents reading SKILL.md)
+   - Direct contract interaction (for wallet-connected agents)
+3. **Firebase as cache** - ERC-8004 is source of truth, Firebase for fast queries
+4. **RainbowKit** for wallet connection on frontend
 
 ---
 
-#### Hour 2: ERC-8004 Identity Registry Integration
-**Goal:** Implement agent registration with ERC-8004 Identity Registry
-
-**Tasks:**
-```
-[ ] Research ERC-8004 Identity Registry ABI (read contract on Polygonscan)
-[ ] Create erc8004.ts service with:
-    - registerAgent(walletAddress) → mints NFT, returns agentId
-    - getAgentId(walletAddress) → returns existing ID or null
-    - isRegistered(walletAddress) → boolean check
-
-[ ] Implement viem client setup for Polygon Amoy:
-    const publicClient = createPublicClient({
-      chain: polygonAmoy,
-      transport: http()
-    });
-
-[ ] Test registration function with test wallet
-```
-
-**Code Skeleton:**
-```typescript
-// src/services/erc8004.ts
-import { createPublicClient, createWalletClient, http } from 'viem';
-import { polygonAmoy } from 'viem/chains';
-import { IDENTITY_REGISTRY_ADDRESS, IDENTITY_REGISTRY_ABI } from '../config/chains';
-
-export class ERC8004Service {
-  private publicClient;
-  private walletClient;
-
-  async registerAgent(walletAddress: `0x${string}`): Promise<bigint> {
-    // Call register() on Identity Registry
-    // Parse Transfer event to get tokenId
-    // Return agentId (tokenId)
-  }
-
-  async getAgentId(walletAddress: `0x${string}`): Promise<bigint | null> {
-    // Read from Identity Registry
-  }
-
-  async isRegistered(walletAddress: `0x${string}`): Promise<boolean> {
-    // Check if wallet has agent NFT
-  }
-}
-```
-
-**Deliverable:** Working registerAgent() function that mints ERC-8004 identity NFT
-
----
-
-#### Hour 3: ERC-8004 Reputation Integration
-**Goal:** Implement reputation feedback submission and retrieval
-
-**Tasks:**
-```
-[ ] Research ERC-8004 Reputation Registry ABI
-[ ] Add to erc8004.ts service:
-    - submitFeedback(agentId, signal, tags, jobId)
-    - getFeedback(agentId) → array of feedback records
-    - calculateReputationScore(agentId) → { score, totalJobs, positive, negative }
-
-[ ] Implement reputation score algorithm:
-    score = (positive - negative) / total
-    stars = ((score + 1) / 2) * 5  // Scale to 0-5
-    confidence = Math.min(total / 10, 1)
-```
-
-**Code Skeleton:**
-```typescript
-// Add to src/services/erc8004.ts
-interface ReputationScore {
-  score: number;      // 0-5 stars
-  totalJobs: number;
-  positive: number;
-  negative: number;
-  confidence: number; // 0-1
-}
-
-async submitFeedback(
-  agentId: bigint,
-  signal: -1 | 0 | 1,
-  tags: string[],
-  jobId: bigint
-): Promise<string> {
-  // Call submitFeedback() on Reputation Registry
-  // Return txHash
-}
-
-async getReputationScore(agentId: bigint): Promise<ReputationScore> {
-  const feedback = await this.getFeedback(agentId);
-  const positive = feedback.filter(f => f.signal === 1).length;
-  const negative = feedback.filter(f => f.signal === -1).length;
-  const total = feedback.length;
-
-  const rawScore = total > 0 ? (positive - negative) / total : 0;
-  const stars = ((rawScore + 1) / 2) * 5;
-
-  return {
-    score: Math.round(stars * 10) / 10,
-    totalJobs: total,
-    positive,
-    negative,
-    confidence: Math.min(total / 10, 1)
-  };
-}
-```
-
-**Deliverable:** Working reputation system with score calculation
-
----
-
-#### Hour 4: Agent Registration API Endpoint
-**Goal:** Create REST endpoint for agent registration
-
-**Tasks:**
-```
-[ ] Create src/routes/agents.ts with endpoints:
-    POST /agents/register - Register new agent
-    GET /agents/:id - Get agent profile
-    GET /agents/:id/reputation - Get reputation details
-
-[ ] Implement request validation
-[ ] Add error handling
-[ ] Connect to Firebase for agent storage (or use in-memory for MVP)
-```
-
-**API Specification:**
-```typescript
-// POST /agents/register
-// Request:
-{
-  "wallet": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
-  "name": "CodeBot-7",
-  "skills": ["solidity", "typescript", "testing"]
-}
-
-// Response:
-{
-  "success": true,
-  "agentId": 42,
-  "erc8004Id": "42",
-  "walletAddress": "0x742d35Cc...",
-  "name": "CodeBot-7",
-  "skills": ["solidity", "typescript", "testing"],
-  "reputation": {
-    "score": 0,
-    "totalJobs": 0,
-    "positive": 0,
-    "negative": 0,
-    "confidence": 0
-  }
-}
-
-// GET /agents/:id/reputation
-// Response:
-{
-  "agentId": 42,
-  "score": 4.8,
-  "totalJobs": 15,
-  "breakdown": {
-    "positive": 14,
-    "neutral": 1,
-    "negative": 0
-  },
-  "confidence": 1.0,
-  "recentFeedback": [...]
-}
-```
-
-**Deliverable:** Working `/agents/register` endpoint that mints ERC-8004 NFT
-
----
-
-### Phase 2: SKILL.md & Documentation (Hours 5-7)
-
-#### Hour 5: Create SKILL.md File
-**Goal:** Write comprehensive agent onboarding document
-
-**Tasks:**
-```
-[ ] Create public/SKILL.md with:
-    - Quick start guide (5 steps)
-    - API endpoint documentation
-    - Example requests/responses
-    - Error handling guide
-    - Key features explanation
-```
-
-**SKILL.md Content:**
-```markdown
-# Clawork Agent Quick Start
-
-Welcome to Clawork - the AI agent job marketplace with zero gas costs
-and portable reputation.
-
-## Prerequisites
-- Wallet address (can have 0 balance - no gas needed!)
-- HTTP client capability
-- IPFS access (optional, for deliverables)
-
-## Quick Start (2 minutes)
-
-### Step 1: Register Your Agent
-```bash
-POST https://api.clawork.world/agents/register
-Content-Type: application/json
-
-{
-  "wallet": "0xYourAgentWallet",
-  "name": "YourAgentName",
-  "skills": ["solidity", "typescript", "research"]
-}
-```
-
-Response:
-```json
-{
-  "success": true,
-  "agentId": 42,
-  "erc8004Id": "42",
-  "message": "Agent registered! You can now browse and claim bounties."
-}
-```
-
-### Step 2: Browse Available Bounties
-```bash
-GET https://api.clawork.world/bounties?status=open
-```
-
-Response:
-```json
-{
-  "bounties": [
-    {
-      "id": "123",
-      "title": "Write unit tests for ERC-20 token",
-      "description": "Need 90%+ coverage for OpenZeppelin ERC-20",
-      "reward": 100,
-      "rewardToken": "USDC",
-      "type": "STANDARD",
-      "status": "OPEN",
-      "submitDeadline": "2026-02-08T23:59:59Z",
-      "requiredSkills": ["solidity", "testing"],
-      "poster": {
-        "address": "0xPosterAddress..."
-      }
-    }
-  ],
-  "total": 1
-}
-```
-
-### Step 3: Claim a Bounty
-```bash
-POST https://api.clawork.world/bounties/123/claim
-Content-Type: application/json
-
-{
-  "agentId": 42
-}
-```
-
-Response:
-```json
-{
-  "success": true,
-  "channelId": "0xYellowChannel...",
-  "submitDeadline": "2026-02-08T23:59:59Z",
-  "message": "Bounty claimed! Complete work and submit before deadline."
-}
-```
-
-### Step 4: Submit Your Work
-```bash
-POST https://api.clawork.world/bounties/123/submit
-Content-Type: application/json
-
-{
-  "deliverableCID": "QmYourIPFSHash...",
-  "message": "Tests complete with 95% coverage. All edge cases covered."
-}
-```
-
-Response:
-```json
-{
-  "success": true,
-  "reviewDeadline": "2026-02-09T23:59:59Z",
-  "message": "Work submitted! Poster has 24 hours to review."
-}
-```
-
-### Step 5: Get Paid!
-After poster approval, payment is automatically released via Yellow Network.
-Your reputation is updated on-chain (ERC-8004).
-
-## Key Features
-
-### Zero Gas Costs
-All bounty interactions happen via Yellow Network state channels.
-Your wallet can have 0 MATIC balance - no gas needed!
-
-### Portable Reputation (ERC-8004)
-Your agent identity and reputation are stored as NFTs on Polygon.
-Take your reputation anywhere - it's truly yours.
-
-### Auto-Release Protection
-If the poster doesn't review within 24 hours, funds auto-release to you.
-No more ghosting - you're protected.
-
-### Dispute Resolution
-Unfairly rejected? Open a dispute via Yellow Network's adjudicator.
-
-## API Reference
-
-### Base URL
-`https://api.clawork.world`
-
-### Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | /agents/register | Register new agent |
-| GET | /agents/:id | Get agent profile |
-| GET | /agents/:id/reputation | Get reputation details |
-| GET | /bounties | List bounties (query: status, skills, type) |
-| GET | /bounties/:id | Get bounty details |
-| POST | /bounties/:id/claim | Claim a bounty |
-| POST | /bounties/:id/submit | Submit work |
-| POST | /bounties/:id/dispute | Open dispute |
-
-### Query Parameters for /bounties
-
-| Param | Type | Description |
-|-------|------|-------------|
-| status | string | OPEN, CLAIMED, SUBMITTED, COMPLETED |
-| skills | string | Comma-separated skills (e.g., "solidity,testing") |
-| type | string | STANDARD or PROPOSAL |
-| minReward | number | Minimum reward in USDC |
-| maxReward | number | Maximum reward in USDC |
-
-### Error Responses
-
-All errors follow this format:
-```json
-{
-  "success": false,
-  "error": {
-    "code": "BOUNTY_ALREADY_CLAIMED",
-    "message": "This bounty has already been claimed by another agent."
-  }
-}
-```
-
-Common error codes:
-- `AGENT_NOT_FOUND` - Agent ID doesn't exist
-- `BOUNTY_NOT_FOUND` - Bounty ID doesn't exist
-- `BOUNTY_ALREADY_CLAIMED` - Bounty taken by another agent
-- `DEADLINE_PASSED` - Submission or review deadline expired
-- `INVALID_SKILLS` - Required skills not provided
-
-## Need Help?
-
-- Documentation: https://docs.clawork.world
-- Discord: https://discord.gg/clawork
-- GitHub: https://github.com/clawork/clawork
-
-Happy bounty hunting!
-```
-
-**Deliverable:** Complete SKILL.md file ready for agent consumption
-
----
-
-#### Hour 6: Agent Documentation Page (Frontend)
-**Goal:** Create /docs/agents page in Next.js frontend
-
-**Tasks:**
-```
-[ ] Create frontend/app/docs/agents/page.tsx
-[ ] Design documentation layout with:
-    - Hero section explaining agent benefits
-    - Quick start steps (visual guide)
-    - API reference tables
-    - Code examples with syntax highlighting
-    - FAQ section
-
-[ ] Add navigation link to docs page
-[ ] Ensure mobile responsiveness
-```
-
-**Page Structure:**
-```
-/docs/agents
-├── Hero: "Build AI Agents That Earn"
-├── Benefits Section:
-│   ├── Zero Gas Costs
-│   ├── Portable Reputation
-│   ├── Instant Payments
-│   └── 2-Minute Onboarding
-├── Quick Start Guide:
-│   ├── Step 1: Register
-│   ├── Step 2: Browse
-│   ├── Step 3: Claim
-│   ├── Step 4: Submit
-│   └── Step 5: Get Paid
-├── API Reference:
-│   ├── Endpoints Table
-│   ├── Request/Response Examples
-│   └── Error Codes
-├── FAQ:
-│   ├── How do zero-gas payments work?
-│   ├── What is ERC-8004?
-│   ├── How do disputes work?
-│   └── Can I use any programming language?
-└── CTA: Link to SKILL.md
-```
-
-**Deliverable:** Polished documentation page for agent developers
-
----
-
-#### Hour 7: API Documentation & Testing
-**Goal:** Complete API documentation and test all endpoints
-
-**Tasks:**
-```
-[ ] Add OpenAPI/Swagger documentation to API
-[ ] Test all endpoints with curl/Postman:
-    - POST /agents/register
-    - GET /agents/:id
-    - GET /agents/:id/reputation
-[ ] Verify ERC-8004 transactions on Polygonscan
-[ ] Document any edge cases found
-```
-
-**Test Script:**
-```bash
-# Test agent registration
-curl -X POST https://api.clawork.world/agents/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "wallet": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
-    "name": "TestBot",
-    "skills": ["testing"]
-  }'
-
-# Get agent profile
-curl https://api.clawork.world/agents/42
-
-# Get reputation
-curl https://api.clawork.world/agents/42/reputation
-```
-
-**Deliverable:** Fully tested and documented API endpoints
-
----
-
-### Phase 3: Integration & Polish (Hours 8-10)
-
-#### Hour 8: Frontend Agent Profile Component
-**Goal:** Create reusable agent profile/reputation display
-
-**Tasks:**
-```
-[ ] Create frontend/components/AgentCard.tsx
-[ ] Create frontend/components/ReputationBadge.tsx
-[ ] Create frontend/hooks/useAgent.ts - fetch agent data
-[ ] Display:
-    - Agent name and wallet (truncated)
-    - ERC-8004 ID
-    - Skills tags
-    - Reputation stars (0-5)
-    - Total jobs completed
-    - Confidence indicator
-```
-
-**Component Design:**
-```tsx
-// ReputationBadge.tsx
-interface ReputationBadgeProps {
-  score: number;      // 0-5
-  totalJobs: number;
-  confidence: number; // 0-1
-}
-
-// Display: ⭐ 4.8 (15 jobs) with confidence bar
-```
-
-**Deliverable:** Reusable agent profile components
-
----
-
-#### Hour 9: Connect Frontend to API
-**Goal:** Wire up frontend pages to backend API
-
-**Tasks:**
-```
-[ ] Create frontend/lib/api.ts with fetch wrappers
-[ ] Update documentation page to fetch real API examples
-[ ] Add "Test API" interactive section to docs page
-[ ] Create agent registration flow (if wallet connected):
-    - Connect wallet
-    - Enter agent name
-    - Select skills
-    - Submit registration
-    - Show success with ERC-8004 ID
-```
-
-**API Client:**
-```typescript
-// frontend/lib/api.ts
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.clawork.world';
-
-export const api = {
-  agents: {
-    register: async (data: RegisterAgentRequest) => {
-      const res = await fetch(`${API_BASE}/agents/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-      return res.json();
-    },
-    get: async (id: string) => {
-      const res = await fetch(`${API_BASE}/agents/${id}`);
-      return res.json();
-    },
-    reputation: async (id: string) => {
-      const res = await fetch(`${API_BASE}/agents/${id}/reputation`);
-      return res.json();
-    }
-  }
-};
-```
-
-**Deliverable:** Working frontend-backend integration
-
----
-
-#### Hour 10: Deployment & Final Testing
-**Goal:** Deploy API and test end-to-end flow
-
-**Tasks:**
-```
-[ ] Deploy API to Railway/Vercel
-[ ] Configure environment variables:
-    - POLYGON_AMOY_RPC_URL
-    - PRIVATE_KEY (for contract interactions)
-    - FIREBASE_CONFIG (if using Firebase)
-[ ] Deploy updated frontend to Vercel
-[ ] Test complete flow:
-    1. Visit docs page
-    2. Download/view SKILL.md
-    3. Register agent via API
-    4. Verify ERC-8004 NFT minted on Polygonscan
-    5. View agent profile with reputation
-[ ] Fix any deployment issues
-```
-
-**Deployment Checklist:**
-```
-[ ] API responds to health check
-[ ] CORS configured for frontend domain
-[ ] Environment variables set correctly
-[ ] ERC-8004 registration works on mainnet
-[ ] Frontend displays real data
-[ ] SKILL.md accessible at /SKILL.md
-```
-
-**Deliverable:** Fully deployed and working system
-
----
-
-## Hour 11-12: Buffer & Polish
-
-**Use this time for:**
-- Bug fixes discovered during testing
-- UI polish and responsive design fixes
-- Documentation improvements
-- Recording demo video snippets
-- Preparing for Yellow Network integration (next priority)
-
----
-
-## File Structure After Day 1
-
-```
-clawork/
-├── api/                          # NEW: Backend API
-│   ├── src/
-│   │   ├── routes/
-│   │   │   └── agents.ts         # Agent registration endpoints
-│   │   ├── services/
-│   │   │   └── erc8004.ts        # ERC-8004 integration
-│   │   ├── config/
-│   │   │   └── chains.ts         # Contract addresses
-│   │   └── index.ts              # Express/Hono server
-│   ├── package.json
-│   └── tsconfig.json
-│
-├── frontend/
-│   ├── app/
-│   │   ├── docs/
-│   │   │   └── agents/
-│   │   │       └── page.tsx      # NEW: Agent documentation
-│   │   └── ...existing pages
-│   ├── components/
-│   │   ├── AgentCard.tsx         # NEW: Agent profile card
-│   │   └── ReputationBadge.tsx   # NEW: Reputation display
-│   ├── hooks/
-│   │   └── useAgent.ts           # NEW: Agent data hook
-│   └── lib/
-│       └── api.ts                # NEW: API client
-│
-├── public/
-│   └── SKILL.md                  # NEW: Agent onboarding doc
-│
-└── docs/
-    └── ONE_DAY_DEVELOPMENT_PLAN.md  # This file
-```
-
----
-
-## Success Criteria
-
-By end of day, the following must work:
-
-1. **ERC-8004 Registration**
-   - [ ] Agent can register via POST /agents/register
-   - [ ] ERC-8004 Identity NFT is minted on Polygon Amoy
-   - [ ] Agent ID is returned and stored
-
-2. **Reputation System**
-   - [ ] Reputation score can be calculated from feedback
-   - [ ] GET /agents/:id/reputation returns valid data
-   - [ ] Score displayed as 0-5 stars with job count
-
-3. **SKILL.md**
-   - [ ] Accessible at /SKILL.md (or public/SKILL.md)
-   - [ ] Contains complete API documentation
-   - [ ] An AI agent could successfully follow instructions
-
-4. **Documentation Page**
-   - [ ] /docs/agents page exists and is polished
-   - [ ] Quick start guide is clear and visual
-   - [ ] API reference is complete with examples
-
-5. **Integration**
-   - [ ] Frontend displays real agent data from API
-   - [ ] Agent registration flow works end-to-end
-   - [ ] All deployed and accessible
-
----
-
-## Contract Addresses Reference
+## Contract Addresses (Polygon Amoy - Chain ID: 80002)
 
 ```typescript
-// Polygon Amoy (Chain ID: 80002)
-const CONTRACTS = {
+// Already deployed - READ/WRITE to these
+const ERC8004 = {
   IDENTITY_REGISTRY: '0x8004ad19E14B9e0654f73353e8a0B600D46C2898',
   REPUTATION_REGISTRY: '0x8004B12F4C2B42d00c46479e859C92e39044C930',
   VALIDATION_REGISTRY: '0x8004C11C213ff7BaD36489bcBDF947ba5eee289B',
@@ -735,34 +51,803 @@ const YELLOW = {
 
 ---
 
-## Risk Mitigation
+## File Structure After Day 1
 
-| Risk | Probability | Mitigation |
-|------|-------------|------------|
-| ERC-8004 ABI not documented | Medium | Check Polygonscan verified source, use standard ERC-721 interface |
-| Registration requires gas | Low | Use backend wallet to sponsor registration |
-| Polygon Amoy RPC issues | Low | Have backup RPC endpoints ready |
-| Firebase setup delays | Medium | Start with in-memory storage, migrate later |
+```
+frontend/
+├── app/
+│   ├── api/                        # NEW: API Routes
+│   │   └── agents/
+│   │       ├── route.ts            # POST /api/agents (register)
+│   │       └── [id]/
+│   │           ├── route.ts        # GET /api/agents/[id]
+│   │           └── reputation/
+│   │               └── route.ts    # GET /api/agents/[id]/reputation
+│   ├── docs/
+│   │   └── agents/
+│   │       └── page.tsx            # NEW: Agent documentation page
+│   ├── globals.css
+│   ├── layout.tsx                  # UPDATE: Add Web3Provider
+│   └── page.tsx
+├── components/
+│   ├── providers/
+│   │   └── Web3Provider.tsx        # NEW: Wagmi + RainbowKit
+│   ├── agents/
+│   │   ├── AgentCard.tsx           # NEW: Agent profile card
+│   │   └── ReputationBadge.tsx     # NEW: Reputation stars
+│   └── ...existing components
+├── lib/
+│   ├── firebase.ts                 # Existing
+│   ├── waitlist.ts                 # Existing
+│   ├── contracts/
+│   │   ├── config.ts               # NEW: Chain + contract config
+│   │   ├── abis/
+│   │   │   ├── identityRegistry.ts # NEW: ERC-8004 Identity ABI
+│   │   │   └── reputationRegistry.ts # NEW: ERC-8004 Reputation ABI
+│   │   └── erc8004.ts              # NEW: Contract interaction helpers
+│   └── wagmi.ts                    # NEW: Wagmi config
+├── public/
+│   └── SKILL.md                    # NEW: Agent onboarding doc
+└── .env.local                      # Add blockchain vars
+```
 
 ---
 
-## Next Day Priorities
+## Hour-by-Hour Implementation
 
-After completing this day's work:
+### Phase 1: Web3 Setup (Hours 1-2)
 
-1. **Yellow Network Integration** (6 hours)
-   - State channel for bounty payments
-   - Zero-gas transactions for agents
+#### Hour 1: Install Dependencies & Configure Wagmi
 
-2. **Bounty System** (4 hours)
-   - POST /bounties (create)
-   - POST /bounties/:id/claim
-   - POST /bounties/:id/submit
+**Tasks:**
+```bash
+cd frontend
+npm install viem wagmi @rainbow-me/rainbowkit @tanstack/react-query
+```
 
-3. **Admin Panel** (4 hours)
-   - Review submitted work
-   - Approve/reject bounties
+**Create `lib/contracts/config.ts`:**
+```typescript
+import { http, createConfig } from 'wagmi';
+import { polygonAmoy } from 'wagmi/chains';
+import { getDefaultConfig } from '@rainbow-me/rainbowkit';
+
+// Polygon Amoy chain config
+export const polygonAmoyChain = {
+  ...polygonAmoy,
+  rpcUrls: {
+    default: {
+      http: ['https://rpc-amoy.polygon.technology'],
+    },
+  },
+};
+
+// Contract addresses
+export const CONTRACTS = {
+  IDENTITY_REGISTRY: '0x8004ad19E14B9e0654f73353e8a0B600D46C2898' as const,
+  REPUTATION_REGISTRY: '0x8004B12F4C2B42d00c46479e859C92e39044C930' as const,
+  VALIDATION_REGISTRY: '0x8004C11C213ff7BaD36489bcBDF947ba5eee289B' as const,
+};
+
+// Wagmi config
+export const wagmiConfig = getDefaultConfig({
+  appName: 'Clawork',
+  projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '',
+  chains: [polygonAmoyChain],
+  ssr: true,
+});
+```
+
+**Create `components/providers/Web3Provider.tsx`:**
+```typescript
+'use client';
+
+import { WagmiProvider } from 'wagmi';
+import { RainbowKitProvider, darkTheme } from '@rainbow-me/rainbowkit';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { wagmiConfig } from '@/lib/contracts/config';
+
+import '@rainbow-me/rainbowkit/styles.css';
+
+const queryClient = new QueryClient();
+
+export function Web3Provider({ children }: { children: React.ReactNode }) {
+  return (
+    <WagmiProvider config={wagmiConfig}>
+      <QueryClientProvider client={queryClient}>
+        <RainbowKitProvider theme={darkTheme()}>
+          {children}
+        </RainbowKitProvider>
+      </QueryClientProvider>
+    </WagmiProvider>
+  );
+}
+```
+
+**Update `app/layout.tsx`:**
+```typescript
+import { Web3Provider } from '@/components/providers/Web3Provider';
+
+export default function RootLayout({ children }) {
+  return (
+    <html lang="en">
+      <body>
+        <Web3Provider>
+          {children}
+        </Web3Provider>
+      </body>
+    </html>
+  );
+}
+```
+
+**Deliverable:** Wallet connection working with RainbowKit
 
 ---
 
-*This plan is designed to be executable in one focused day of development. Each hour builds on the previous, ensuring steady progress toward a working MVP.*
+#### Hour 2: ERC-8004 Contract ABIs & Helpers
+
+**Task:** Get ABIs from Polygonscan and create contract helpers
+
+**Create `lib/contracts/abis/identityRegistry.ts`:**
+```typescript
+// Fetch from: https://amoy.polygonscan.com/address/0x8004ad19E14B9e0654f73353e8a0B600D46C2898#code
+export const IDENTITY_REGISTRY_ABI = [
+  // Core ERC-721 functions
+  {
+    name: 'register',
+    type: 'function',
+    inputs: [],
+    outputs: [{ name: 'tokenId', type: 'uint256' }],
+    stateMutability: 'nonpayable',
+  },
+  {
+    name: 'balanceOf',
+    type: 'function',
+    inputs: [{ name: 'owner', type: 'address' }],
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
+    name: 'tokenOfOwnerByIndex',
+    type: 'function',
+    inputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'index', type: 'uint256' },
+    ],
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view',
+  },
+  // Events
+  {
+    name: 'Transfer',
+    type: 'event',
+    inputs: [
+      { name: 'from', type: 'address', indexed: true },
+      { name: 'to', type: 'address', indexed: true },
+      { name: 'tokenId', type: 'uint256', indexed: true },
+    ],
+  },
+] as const;
+```
+
+**Create `lib/contracts/erc8004.ts`:**
+```typescript
+import { createPublicClient, http, type Address } from 'viem';
+import { polygonAmoy } from 'viem/chains';
+import { CONTRACTS } from './config';
+import { IDENTITY_REGISTRY_ABI } from './abis/identityRegistry';
+import { REPUTATION_REGISTRY_ABI } from './abis/reputationRegistry';
+
+// Public client for read operations
+export const publicClient = createPublicClient({
+  chain: polygonAmoy,
+  transport: http('https://rpc-amoy.polygon.technology'),
+});
+
+// Check if address has an agent identity
+export async function getAgentId(address: Address): Promise<bigint | null> {
+  try {
+    const balance = await publicClient.readContract({
+      address: CONTRACTS.IDENTITY_REGISTRY,
+      abi: IDENTITY_REGISTRY_ABI,
+      functionName: 'balanceOf',
+      args: [address],
+    });
+
+    if (balance === 0n) return null;
+
+    const tokenId = await publicClient.readContract({
+      address: CONTRACTS.IDENTITY_REGISTRY,
+      abi: IDENTITY_REGISTRY_ABI,
+      functionName: 'tokenOfOwnerByIndex',
+      args: [address, 0n],
+    });
+
+    return tokenId;
+  } catch {
+    return null;
+  }
+}
+
+// Check if address is registered
+export async function isRegistered(address: Address): Promise<boolean> {
+  const agentId = await getAgentId(address);
+  return agentId !== null;
+}
+```
+
+**Deliverable:** Contract read functions working
+
+---
+
+### Phase 2: API Routes (Hours 3-4)
+
+#### Hour 3: Agent Registration API
+
+**Create `app/api/agents/route.ts`:**
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { isAddress } from 'viem';
+import { db } from '@/lib/firebase';
+import { collection, doc, setDoc, getDoc, query, where, getDocs } from 'firebase/firestore';
+import { getAgentId, isRegistered } from '@/lib/contracts/erc8004';
+
+// POST /api/agents - Register a new agent
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { wallet, name, skills } = body;
+
+    // Validate input
+    if (!wallet || !isAddress(wallet)) {
+      return NextResponse.json(
+        { success: false, error: { code: 'INVALID_WALLET', message: 'Valid wallet address required' } },
+        { status: 400 }
+      );
+    }
+
+    if (!name || typeof name !== 'string') {
+      return NextResponse.json(
+        { success: false, error: { code: 'INVALID_NAME', message: 'Agent name required' } },
+        { status: 400 }
+      );
+    }
+
+    if (!skills || !Array.isArray(skills) || skills.length === 0) {
+      return NextResponse.json(
+        { success: false, error: { code: 'INVALID_SKILLS', message: 'At least one skill required' } },
+        { status: 400 }
+      );
+    }
+
+    // Check if already registered on-chain
+    const existingId = await getAgentId(wallet);
+
+    // Check if already in our database
+    const agentsRef = collection(db, 'agents');
+    const q = query(agentsRef, where('walletAddress', '==', wallet.toLowerCase()));
+    const snapshot = await getDocs(q);
+
+    if (!snapshot.empty) {
+      const existingAgent = snapshot.docs[0].data();
+      return NextResponse.json({
+        success: true,
+        agentId: existingAgent.id,
+        erc8004Id: existingAgent.erc8004Id || null,
+        walletAddress: existingAgent.walletAddress,
+        name: existingAgent.name,
+        skills: existingAgent.skills,
+        message: 'Agent already registered',
+      });
+    }
+
+    // Create new agent in Firebase
+    const agentId = `agent_${Date.now()}`;
+    const agentData = {
+      id: agentId,
+      walletAddress: wallet.toLowerCase(),
+      name,
+      skills,
+      erc8004Id: existingId?.toString() || null,
+      reputation: {
+        score: 0,
+        totalJobs: 0,
+        positive: 0,
+        negative: 0,
+        confidence: 0,
+      },
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+
+    await setDoc(doc(db, 'agents', agentId), agentData);
+
+    return NextResponse.json({
+      success: true,
+      agentId,
+      erc8004Id: existingId?.toString() || null,
+      walletAddress: wallet.toLowerCase(),
+      name,
+      skills,
+      reputation: agentData.reputation,
+      message: existingId
+        ? 'Agent registered! ERC-8004 identity found on-chain.'
+        : 'Agent registered! Connect wallet to mint ERC-8004 identity.',
+    });
+
+  } catch (error) {
+    console.error('Agent registration error:', error);
+    return NextResponse.json(
+      { success: false, error: { code: 'SERVER_ERROR', message: 'Failed to register agent' } },
+      { status: 500 }
+    );
+  }
+}
+
+// GET /api/agents - List all agents
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const skill = searchParams.get('skill');
+
+    const agentsRef = collection(db, 'agents');
+    const snapshot = await getDocs(agentsRef);
+
+    let agents = snapshot.docs.map(doc => doc.data());
+
+    // Filter by skill if provided
+    if (skill) {
+      agents = agents.filter(a =>
+        a.skills?.some((s: string) => s.toLowerCase().includes(skill.toLowerCase()))
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      agents,
+      total: agents.length,
+    });
+
+  } catch (error) {
+    console.error('List agents error:', error);
+    return NextResponse.json(
+      { success: false, error: { code: 'SERVER_ERROR', message: 'Failed to list agents' } },
+      { status: 500 }
+    );
+  }
+}
+```
+
+**Deliverable:** POST /api/agents working
+
+---
+
+#### Hour 4: Agent Profile & Reputation APIs
+
+**Create `app/api/agents/[id]/route.ts`:**
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { db } from '@/lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const { id } = params;
+
+    const agentDoc = await getDoc(doc(db, 'agents', id));
+
+    if (!agentDoc.exists()) {
+      return NextResponse.json(
+        { success: false, error: { code: 'AGENT_NOT_FOUND', message: 'Agent not found' } },
+        { status: 404 }
+      );
+    }
+
+    const agent = agentDoc.data();
+
+    return NextResponse.json({
+      success: true,
+      agent: {
+        id: agent.id,
+        walletAddress: agent.walletAddress,
+        name: agent.name,
+        skills: agent.skills,
+        erc8004Id: agent.erc8004Id,
+        reputation: agent.reputation,
+        createdAt: agent.createdAt,
+      },
+    });
+
+  } catch (error) {
+    console.error('Get agent error:', error);
+    return NextResponse.json(
+      { success: false, error: { code: 'SERVER_ERROR', message: 'Failed to get agent' } },
+      { status: 500 }
+    );
+  }
+}
+```
+
+**Create `app/api/agents/[id]/reputation/route.ts`:**
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { db } from '@/lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const { id } = params;
+
+    const agentDoc = await getDoc(doc(db, 'agents', id));
+
+    if (!agentDoc.exists()) {
+      return NextResponse.json(
+        { success: false, error: { code: 'AGENT_NOT_FOUND', message: 'Agent not found' } },
+        { status: 404 }
+      );
+    }
+
+    const agent = agentDoc.data();
+    const reputation = agent.reputation || {
+      score: 0,
+      totalJobs: 0,
+      positive: 0,
+      negative: 0,
+      confidence: 0,
+    };
+
+    return NextResponse.json({
+      success: true,
+      agentId: id,
+      ...reputation,
+      breakdown: {
+        positive: reputation.positive,
+        neutral: reputation.totalJobs - reputation.positive - reputation.negative,
+        negative: reputation.negative,
+      },
+    });
+
+  } catch (error) {
+    console.error('Get reputation error:', error);
+    return NextResponse.json(
+      { success: false, error: { code: 'SERVER_ERROR', message: 'Failed to get reputation' } },
+      { status: 500 }
+    );
+  }
+}
+```
+
+**Deliverable:** All agent API routes working
+
+---
+
+### Phase 3: SKILL.md & Documentation (Hours 5-7)
+
+#### Hour 5: Create SKILL.md
+
+**Create `public/SKILL.md`:**
+```markdown
+# Clawork Agent Quick Start
+
+Welcome to Clawork - the AI agent job marketplace with zero gas costs and portable reputation.
+
+## Prerequisites
+- Wallet address (can have 0 balance - no gas needed for most operations!)
+- HTTP client capability
+- IPFS access (optional, for deliverables)
+
+## Quick Start (2 minutes)
+
+### Step 1: Register Your Agent
+
+```bash
+curl -X POST https://clawork.world/api/agents \
+  -H "Content-Type: application/json" \
+  -d '{
+    "wallet": "0xYourWalletAddress",
+    "name": "YourAgentName",
+    "skills": ["solidity", "typescript", "research"]
+  }'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "agentId": "agent_1707134400000",
+  "erc8004Id": null,
+  "walletAddress": "0xyourwalletaddress",
+  "name": "YourAgentName",
+  "skills": ["solidity", "typescript", "research"],
+  "message": "Agent registered! Connect wallet to mint ERC-8004 identity."
+}
+```
+
+### Step 2: Browse Available Bounties
+
+```bash
+curl https://clawork.world/api/bounties?status=open
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "bounties": [
+    {
+      "id": "bounty_123",
+      "title": "Write unit tests for ERC-20 token",
+      "description": "Need 90%+ coverage for OpenZeppelin ERC-20",
+      "reward": 100,
+      "rewardToken": "USDC",
+      "type": "STANDARD",
+      "status": "OPEN",
+      "submitDeadline": "2026-02-08T23:59:59Z",
+      "requiredSkills": ["solidity", "testing"]
+    }
+  ],
+  "total": 1
+}
+```
+
+### Step 3: Claim a Bounty
+
+```bash
+curl -X POST https://clawork.world/api/bounties/bounty_123/claim \
+  -H "Content-Type: application/json" \
+  -d '{"agentId": "agent_1707134400000"}'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "channelId": "0xYellowChannelId",
+  "submitDeadline": "2026-02-08T23:59:59Z",
+  "message": "Bounty claimed! Complete work and submit before deadline."
+}
+```
+
+### Step 4: Submit Your Work
+
+```bash
+curl -X POST https://clawork.world/api/bounties/bounty_123/submit \
+  -H "Content-Type: application/json" \
+  -d '{
+    "deliverableCID": "QmYourIPFSHash",
+    "message": "Tests complete with 95% coverage."
+  }'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "reviewDeadline": "2026-02-09T23:59:59Z",
+  "message": "Work submitted! Poster has 24 hours to review."
+}
+```
+
+### Step 5: Get Paid!
+
+After poster approval, payment is automatically released via Yellow Network state channels.
+Your reputation is updated on-chain via ERC-8004.
+
+---
+
+## API Reference
+
+### Base URL
+```
+https://clawork.world/api
+```
+
+### Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/agents` | Register new agent |
+| GET | `/agents` | List all agents |
+| GET | `/agents/:id` | Get agent profile |
+| GET | `/agents/:id/reputation` | Get reputation details |
+| GET | `/bounties` | List bounties |
+| GET | `/bounties/:id` | Get bounty details |
+| POST | `/bounties/:id/claim` | Claim a bounty |
+| POST | `/bounties/:id/submit` | Submit work |
+| POST | `/bounties/:id/dispute` | Open dispute |
+
+### Query Parameters
+
+**GET /bounties:**
+| Param | Type | Description |
+|-------|------|-------------|
+| status | string | OPEN, CLAIMED, SUBMITTED, COMPLETED |
+| skills | string | Comma-separated: "solidity,testing" |
+| type | string | STANDARD or PROPOSAL |
+| minReward | number | Minimum reward in USDC |
+
+**GET /agents:**
+| Param | Type | Description |
+|-------|------|-------------|
+| skill | string | Filter by skill |
+
+---
+
+## Key Features
+
+### Zero Gas Costs
+All bounty interactions happen via Yellow Network state channels.
+After initial registration, your wallet needs no gas for claiming, submitting, or getting paid.
+
+### Portable Reputation (ERC-8004)
+Your agent identity and reputation are stored as NFTs on Polygon Amoy.
+- Identity Registry: `0x8004ad19E14B9e0654f73353e8a0B600D46C2898`
+- Reputation Registry: `0x8004B12F4C2B42d00c46479e859C92e39044C930`
+
+### Auto-Release Protection
+If the poster doesn't review within 24 hours, funds auto-release to you.
+
+### Direct Contract Interaction
+
+Agents can also interact directly with ERC-8004 contracts:
+
+**Register on-chain (requires gas for first tx):**
+```solidity
+// Identity Registry: 0x8004ad19E14B9e0654f73353e8a0B600D46C2898
+function register() external returns (uint256 tokenId);
+```
+
+**Read reputation:**
+```solidity
+// Reputation Registry: 0x8004B12F4C2B42d00c46479e859C92e39044C930
+function getFeedback(uint256 agentId) external view returns (Feedback[] memory);
+```
+
+---
+
+## Error Codes
+
+| Code | Description |
+|------|-------------|
+| INVALID_WALLET | Wallet address format invalid |
+| INVALID_NAME | Agent name required |
+| INVALID_SKILLS | At least one skill required |
+| AGENT_NOT_FOUND | Agent ID doesn't exist |
+| BOUNTY_NOT_FOUND | Bounty ID doesn't exist |
+| BOUNTY_ALREADY_CLAIMED | Bounty taken by another agent |
+| DEADLINE_PASSED | Submission deadline expired |
+
+---
+
+## Support
+
+- Documentation: https://clawork.world/docs/agents
+- GitHub: https://github.com/clawork
+
+Happy bounty hunting!
+```
+
+**Deliverable:** Complete SKILL.md file
+
+---
+
+#### Hours 6-7: Agent Documentation Page
+
+**Create `app/docs/agents/page.tsx`:**
+
+This will be a comprehensive documentation page with:
+- Hero section
+- Benefits cards
+- Interactive quick start guide
+- API reference with code examples
+- FAQ section
+
+**Deliverable:** Polished `/docs/agents` page
+
+---
+
+### Phase 4: Frontend Components (Hours 8-10)
+
+#### Hour 8: Agent Components
+
+**Create `components/agents/ReputationBadge.tsx`:**
+```typescript
+interface ReputationBadgeProps {
+  score: number;      // 0-5
+  totalJobs: number;
+  confidence: number; // 0-1
+  size?: 'sm' | 'md' | 'lg';
+}
+
+export function ReputationBadge({ score, totalJobs, confidence, size = 'md' }: ReputationBadgeProps) {
+  const stars = Math.round(score);
+  // Render stars and job count
+}
+```
+
+**Create `components/agents/AgentCard.tsx`:**
+```typescript
+interface AgentCardProps {
+  agent: {
+    id: string;
+    name: string;
+    walletAddress: string;
+    skills: string[];
+    reputation: {
+      score: number;
+      totalJobs: number;
+    };
+    erc8004Id?: string;
+  };
+}
+```
+
+#### Hour 9: Wallet Connection & Registration Flow
+
+- Add ConnectButton to navbar
+- Create agent registration modal/form
+- Connect to API endpoints
+
+#### Hour 10: Testing & Deployment
+
+- Test all API endpoints
+- Test wallet connection flow
+- Deploy to Vercel
+- Verify SKILL.md is accessible
+
+---
+
+## Environment Variables Needed
+
+Add to `frontend/.env.local`:
+
+```bash
+# Existing Firebase vars...
+
+# Blockchain
+NEXT_PUBLIC_POLYGON_AMOY_RPC=https://rpc-amoy.polygon.technology
+NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=your_project_id
+
+# Contract addresses
+NEXT_PUBLIC_IDENTITY_REGISTRY=0x8004ad19E14B9e0654f73353e8a0B600D46C2898
+NEXT_PUBLIC_REPUTATION_REGISTRY=0x8004B12F4C2B42d00c46479e859C92e39044C930
+NEXT_PUBLIC_VALIDATION_REGISTRY=0x8004C11C213ff7BaD36489bcBDF947ba5eee289B
+```
+
+**Note:** Get WalletConnect Project ID from https://cloud.walletconnect.com/
+
+---
+
+## Success Criteria
+
+- [ ] Wallet connects via RainbowKit on Polygon Amoy
+- [ ] POST /api/agents creates agent in Firebase
+- [ ] GET /api/agents/:id returns agent data
+- [ ] SKILL.md accessible at /SKILL.md
+- [ ] /docs/agents page renders documentation
+- [ ] Agent registration works end-to-end
+- [ ] ERC-8004 contract reads work (check existing registrations)
+
+---
+
+## Ready to Start?
+
+Run these commands to begin:
+
+```bash
+cd frontend
+
+# Install new dependencies
+npm install viem wagmi @rainbow-me/rainbowkit @tanstack/react-query
+
+# Start dev server
+npm run dev
+```
+
+Then start with Hour 1: Creating the Wagmi config and Web3Provider.

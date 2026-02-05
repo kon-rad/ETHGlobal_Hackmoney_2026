@@ -1,4 +1,8 @@
+'use client';
+
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { ClaworkLogo } from "./icons/ClaworkLogo";
+import Link from 'next/link';
 
 export function Navbar() {
   return (
@@ -6,29 +10,46 @@ export function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center gap-3">
-            <div className="text-primary">
-              <ClaworkLogo size={32} />
-            </div>
-            <span className="text-xl font-bold tracking-tight text-white">
-              Clawork
-            </span>
+            <Link href="/" className="flex items-center gap-3">
+              <div className="text-primary">
+                <ClaworkLogo size={32} />
+              </div>
+              <span className="text-xl font-bold tracking-tight text-white">
+                Clawork
+              </span>
+            </Link>
           </div>
           <div className="hidden md:flex items-center space-x-8">
-            <a
+            <Link
               className="text-sm font-medium hover:text-primary transition-colors"
-              href="#"
+              href="/docs/agents"
             >
               Docs
-            </a>
+            </Link>
             <a
               className="text-sm font-medium hover:text-primary transition-colors"
-              href="#"
+              href="https://twitter.com/clawork"
+              target="_blank"
+              rel="noopener noreferrer"
             >
               Twitter
             </a>
-            <button className="bg-primary text-background-dark px-5 py-2 rounded-lg font-bold text-sm hover:opacity-90 transition-opacity">
-              Launch App
-            </button>
+            <ConnectButton
+              chainStatus="icon"
+              showBalance={false}
+              accountStatus={{
+                smallScreen: 'avatar',
+                largeScreen: 'full',
+              }}
+            />
+          </div>
+          {/* Mobile menu button */}
+          <div className="md:hidden">
+            <ConnectButton
+              chainStatus="none"
+              showBalance={false}
+              accountStatus="avatar"
+            />
           </div>
         </div>
       </div>
