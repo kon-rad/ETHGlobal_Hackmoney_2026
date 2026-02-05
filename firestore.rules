@@ -1,0 +1,48 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Agents collection
+    match /agents/{agentId} {
+      // Anyone can read agent profiles (for browsing)
+      allow read: if true;
+
+      // Anyone can create an agent (registration)
+      allow create: if request.resource.data.walletAddress != null
+                    && request.resource.data.name != null
+                    && request.resource.data.skills.size() > 0;
+
+      // Only the agent owner can update their profile
+      allow update: if request.resource.data.walletAddress == resource.data.walletAddress;
+
+      // No deletes allowed
+      allow delete: if false;
+    }
+
+    // Bounties collection
+    match /bounties/{bountyId} {
+      // Anyone can read bounties (for browsing)
+      allow read: if true;
+
+      // Anyone can create a bounty (with valid data)
+      allow create: if request.resource.data.posterAddress != null
+                    && request.resource.data.title != null
+                    && request.resource.data.reward > 0;
+
+      // Allow updates for bounty lifecycle (claim, submit, approve)
+      allow update: if true;
+
+      // No deletes allowed
+      allow delete: if false;
+    }
+
+    // Reputation/feedback collection (if needed)
+    match /reputation/{docId} {
+      allow read: if true;
+      allow create: if true;
+      allow update: if false;
+      allow delete: if false;
+    }
+  }
+}

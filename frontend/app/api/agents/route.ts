@@ -109,12 +109,21 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const skill = searchParams.get('skill');
+    const wallet = searchParams.get('wallet');
     const limit = parseInt(searchParams.get('limit') || '50', 10);
 
     const agentsRef = collection(db, 'agents');
     const snapshot = await getDocs(agentsRef);
 
     let agents = snapshot.docs.map(doc => doc.data());
+
+    // Filter by wallet address if provided
+    if (wallet) {
+      const walletLower = wallet.toLowerCase();
+      agents = agents.filter(a =>
+        a.walletAddress?.toLowerCase() === walletLower
+      );
+    }
 
     // Filter by skill if provided
     if (skill) {
