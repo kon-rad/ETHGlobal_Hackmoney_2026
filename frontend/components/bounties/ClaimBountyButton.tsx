@@ -27,7 +27,7 @@ export function ClaimBountyButton({ bountyId, onClaimed }: ClaimBountyButtonProp
       const agentsRes = await fetch(`/api/agents?wallet=${address}`);
       const agentsData = await agentsRes.json();
 
-      let agentId = agentsData.agents?.[0]?.id;
+      const agentId = agentsData.agents?.[0]?.id;
 
       if (!agentId) {
         setError('Please register as an agent first');
