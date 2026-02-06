@@ -1,21 +1,73 @@
 import { createPublicClient, http, type Address } from 'viem';
-import { polygonAmoy } from 'viem/chains';
-import { CONTRACTS, POLYGON_AMOY_RPC } from './addresses';
+import { polygonAmoy, baseSepolia, base } from 'viem/chains';
+import {
+  ERC8004_CONTRACTS,
+  CHAIN_CONFIG,
+  DEFAULT_NETWORK,
+  type SupportedNetwork
+} from './addresses';
 import { IDENTITY_REGISTRY_ABI } from './abis/identityRegistry';
 import { REPUTATION_REGISTRY_ABI } from './abis/reputationRegistry';
 import { VALIDATION_REGISTRY_ABI } from './abis/validationRegistry';
 
-// Public client for read operations (server-side or client-side)
-export const publicClient = createPublicClient({
-  chain: polygonAmoy,
-  transport: http(POLYGON_AMOY_RPC),
-});
+// Chain mapping for viem
+const CHAIN_MAP = {
+  polygonAmoy,
+  baseSepolia,
+  base,
+} as const;
+
+// Create a public client for a specific network
+function createClientForNetwork(network: SupportedNetwork) {
+  const chain = CHAIN_MAP[network];
+  const rpc = CHAIN_CONFIG[network].rpc;
+
+  return createPublicClient({
+    chain,
+    transport: http(rpc),
+  });
+}
+
+// Pre-create clients for each network
+const clients = {
+  polygonAmoy: createClientForNetwork('polygonAmoy'),
+  baseSepolia: createClientForNetwork('baseSepolia'),
+  base: createClientForNetwork('base'),
+};
+
+// Get public client for a specific network
+export function getPublicClient(network: SupportedNetwork = DEFAULT_NETWORK) {
+  return clients[network];
+}
+
+// Get contracts for a specific network
+export function getContracts(network: SupportedNetwork = DEFAULT_NETWORK) {
+  return ERC8004_CONTRACTS[network];
+}
+
+// Legacy: Default public client (uses DEFAULT_NETWORK which is now baseSepolia)
+export const publicClient = clients[DEFAULT_NETWORK];
+
+// Current active network (can be changed at runtime)
+let currentNetwork: SupportedNetwork = DEFAULT_NETWORK;
+
+export function setCurrentNetwork(network: SupportedNetwork) {
+  currentNetwork = network;
+}
+
+export function getCurrentNetwork(): SupportedNetwork {
+  return currentNetwork;
+}
 
 // Check if address has an agent identity and return the token ID
-export async function getAgentId(address: Address): Promise<bigint | null> {
+export async function getAgentId(address: Address, network?: SupportedNetwork): Promise<bigint | null> {
+  const net = network ?? currentNetwork;
+  const client = getPublicClient(net);
+  const contracts = getContracts(net);
+
   try {
-    const balance = await publicClient.readContract({
-      address: CONTRACTS.IDENTITY_REGISTRY,
+    const balance = await client.readContract({
+      address: contracts.IDENTITY_REGISTRY,
       abi: IDENTITY_REGISTRY_ABI,
       functionName: 'balanceOf',
       args: [address],
@@ -23,8 +75,8 @@ export async function getAgentId(address: Address): Promise<bigint | null> {
 
     if (balance === 0n) return null;
 
-    const tokenId = await publicClient.readContract({
-      address: CONTRACTS.IDENTITY_REGISTRY,
+    const tokenId = await client.readContract({
+      address: contracts.IDENTITY_REGISTRY,
       abi: IDENTITY_REGISTRY_ABI,
       functionName: 'tokenOfOwnerByIndex',
       args: [address, 0n],
@@ -32,53 +84,61 @@ export async function getAgentId(address: Address): Promise<bigint | null> {
 
     return tokenId;
   } catch (error) {
-    console.error('Error getting agent ID:', error);
+    console.error(`Error getting agent ID on ${net}:`, error);
     return null;
   }
 }
 
 // Check if address is registered
-export async function isRegistered(address: Address): Promise<boolean> {
-  const agentId = await getAgentId(address);
+export async function isRegistered(address: Address, network?: SupportedNetwork): Promise<boolean> {
+  const agentId = await getAgentId(address, network);
   return agentId !== null;
 }
 
 // Get total registered agents
-export async function getTotalAgents(): Promise<bigint> {
+export async function getTotalAgents(network?: SupportedNetwork): Promise<bigint> {
+  const net = network ?? currentNetwork;
+  const client = getPublicClient(net);
+  const contracts = getContracts(net);
+
   try {
-    const total = await publicClient.readContract({
-      address: CONTRACTS.IDENTITY_REGISTRY,
+    const total = await client.readContract({
+      address: contracts.IDENTITY_REGISTRY,
       abi: IDENTITY_REGISTRY_ABI,
       functionName: 'totalSupply',
     });
     return total;
   } catch (error) {
-    console.error('Error getting total agents:', error);
+    console.error(`Error getting total agents on ${net}:`, error);
     return 0n;
   }
 }
 
 // Get agent reputation
-export async function getAgentReputation(agentId: bigint): Promise<{
+export async function getAgentReputation(agentId: bigint, network?: SupportedNetwork): Promise<{
   score: bigint;
   totalFeedback: bigint;
 } | null> {
+  const net = network ?? currentNetwork;
+  const client = getPublicClient(net);
+  const contracts = getContracts(net);
+
   try {
-    const [score, totalFeedback] = await publicClient.readContract({
-      address: CONTRACTS.REPUTATION_REGISTRY,
+    const [score, totalFeedback] = await client.readContract({
+      address: contracts.REPUTATION_REGISTRY,
       abi: REPUTATION_REGISTRY_ABI,
       functionName: 'getReputation',
       args: [agentId],
     });
     return { score, totalFeedback };
   } catch (error) {
-    console.error('Error getting reputation:', error);
+    console.error(`Error getting reputation on ${net}:`, error);
     return null;
   }
 }
 
 // Get agent feedback history
-export async function getAgentFeedback(agentId: bigint): Promise<
+export async function getAgentFeedback(agentId: bigint, network?: SupportedNetwork): Promise<
   Array<{
     from: Address;
     rating: number;
@@ -86,9 +146,13 @@ export async function getAgentFeedback(agentId: bigint): Promise<
     timestamp: bigint;
   }>
 > {
+  const net = network ?? currentNetwork;
+  const client = getPublicClient(net);
+  const contracts = getContracts(net);
+
   try {
-    const feedback = await publicClient.readContract({
-      address: CONTRACTS.REPUTATION_REGISTRY,
+    const feedback = await client.readContract({
+      address: contracts.REPUTATION_REGISTRY,
       abi: REPUTATION_REGISTRY_ABI,
       functionName: 'getFeedback',
       args: [agentId],
@@ -100,7 +164,7 @@ export async function getAgentFeedback(agentId: bigint): Promise<
       timestamp: bigint;
     }>;
   } catch (error) {
-    console.error('Error getting feedback:', error);
+    console.error(`Error getting feedback on ${net}:`, error);
     return [];
   }
 }
@@ -128,10 +192,20 @@ export interface ValidationInfo {
 }
 
 // Get validation status by request ID
-export async function getValidationStatus(requestId: bigint): Promise<ValidationInfo | null> {
+// Note: Validation Registry may not be deployed on all networks
+export async function getValidationStatus(requestId: bigint, network?: SupportedNetwork): Promise<ValidationInfo | null> {
+  const net = network ?? currentNetwork;
+  const client = getPublicClient(net);
+  const contracts = getContracts(net);
+
+  if (!contracts.VALIDATION_REGISTRY) {
+    console.warn(`Validation Registry not deployed on ${net}`);
+    return null;
+  }
+
   try {
-    const result = await publicClient.readContract({
-      address: CONTRACTS.VALIDATION_REGISTRY,
+    const result = await client.readContract({
+      address: contracts.VALIDATION_REGISTRY,
       abi: VALIDATION_REGISTRY_ABI,
       functionName: 'getValidationStatus',
       args: [requestId],
@@ -159,23 +233,32 @@ export async function getValidationStatus(requestId: bigint): Promise<Validation
       respondedAt,
     };
   } catch (error) {
-    console.error('Error getting validation status:', error);
+    console.error(`Error getting validation status on ${net}:`, error);
     return null;
   }
 }
 
 // Get all validation request IDs for an agent
-export async function getAgentValidations(agentId: bigint): Promise<bigint[]> {
+export async function getAgentValidations(agentId: bigint, network?: SupportedNetwork): Promise<bigint[]> {
+  const net = network ?? currentNetwork;
+  const client = getPublicClient(net);
+  const contracts = getContracts(net);
+
+  if (!contracts.VALIDATION_REGISTRY) {
+    console.warn(`Validation Registry not deployed on ${net}`);
+    return [];
+  }
+
   try {
-    const requestIds = await publicClient.readContract({
-      address: CONTRACTS.VALIDATION_REGISTRY,
+    const requestIds = await client.readContract({
+      address: contracts.VALIDATION_REGISTRY,
       abi: VALIDATION_REGISTRY_ABI,
       functionName: 'getAgentValidations',
       args: [agentId],
     });
     return requestIds as bigint[];
   } catch (error) {
-    console.error('Error getting agent validations:', error);
+    console.error(`Error getting agent validations on ${net}:`, error);
     return [];
   }
 }
@@ -184,50 +267,68 @@ export async function getAgentValidations(agentId: bigint): Promise<bigint[]> {
 export async function hasValidation(
   agentId: bigint,
   validationType: string,
-  validator: Address
+  validator: Address,
+  network?: SupportedNetwork
 ): Promise<boolean> {
+  const net = network ?? currentNetwork;
+  const client = getPublicClient(net);
+  const contracts = getContracts(net);
+
+  if (!contracts.VALIDATION_REGISTRY) {
+    console.warn(`Validation Registry not deployed on ${net}`);
+    return false;
+  }
+
   try {
-    const result = await publicClient.readContract({
-      address: CONTRACTS.VALIDATION_REGISTRY,
+    const result = await client.readContract({
+      address: contracts.VALIDATION_REGISTRY,
       abi: VALIDATION_REGISTRY_ABI,
       functionName: 'hasValidation',
       args: [agentId, validationType, validator],
     });
     return result as boolean;
   } catch (error) {
-    console.error('Error checking validation:', error);
+    console.error(`Error checking validation on ${net}:`, error);
     return false;
   }
 }
 
 // Get agent URI from identity registry
-export async function getAgentURI(agentId: bigint): Promise<string | null> {
+export async function getAgentURI(agentId: bigint, network?: SupportedNetwork): Promise<string | null> {
+  const net = network ?? currentNetwork;
+  const client = getPublicClient(net);
+  const contracts = getContracts(net);
+
   try {
-    const uri = await publicClient.readContract({
-      address: CONTRACTS.IDENTITY_REGISTRY,
+    const uri = await client.readContract({
+      address: contracts.IDENTITY_REGISTRY,
       abi: IDENTITY_REGISTRY_ABI,
       functionName: 'agentURI',
       args: [agentId],
     });
     return uri as string;
   } catch (error) {
-    console.error('Error getting agent URI:', error);
+    console.error(`Error getting agent URI on ${net}:`, error);
     return null;
   }
 }
 
 // Get delegated wallet for an agent
-export async function getAgentWallet(agentId: bigint): Promise<Address | null> {
+export async function getAgentWallet(agentId: bigint, network?: SupportedNetwork): Promise<Address | null> {
+  const net = network ?? currentNetwork;
+  const client = getPublicClient(net);
+  const contracts = getContracts(net);
+
   try {
-    const wallet = await publicClient.readContract({
-      address: CONTRACTS.IDENTITY_REGISTRY,
+    const wallet = await client.readContract({
+      address: contracts.IDENTITY_REGISTRY,
       abi: IDENTITY_REGISTRY_ABI,
       functionName: 'getAgentWallet',
       args: [agentId],
     });
     return wallet as Address;
   } catch (error) {
-    console.error('Error getting agent wallet:', error);
+    console.error(`Error getting agent wallet on ${net}:`, error);
     return null;
   }
 }
@@ -237,15 +338,20 @@ export async function getReputationSummary(
   agentId: bigint,
   clientAddresses: Address[] = [],
   tag1: string = '',
-  tag2: string = ''
+  tag2: string = '',
+  network?: SupportedNetwork
 ): Promise<{
   count: bigint;
   summaryValue: bigint;
   summaryValueDecimals: number;
 } | null> {
+  const net = network ?? currentNetwork;
+  const client = getPublicClient(net);
+  const contracts = getContracts(net);
+
   try {
-    const result = await publicClient.readContract({
-      address: CONTRACTS.REPUTATION_REGISTRY,
+    const result = await client.readContract({
+      address: contracts.REPUTATION_REGISTRY,
       abi: REPUTATION_REGISTRY_ABI,
       functionName: 'getSummary',
       args: [agentId, clientAddresses, tag1, tag2],
@@ -254,7 +360,7 @@ export async function getReputationSummary(
     const [count, summaryValue, summaryValueDecimals] = result as [bigint, bigint, number];
     return { count, summaryValue, summaryValueDecimals };
   } catch (error) {
-    console.error('Error getting reputation summary:', error);
+    console.error(`Error getting reputation summary on ${net}:`, error);
     return null;
   }
 }

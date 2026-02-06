@@ -90,15 +90,37 @@ npm run build    # Production build
 
 | Network | Chain ID | Role | ERC-8004 |
 |---------|----------|------|----------|
-| Polygon Amoy | 80002 | PRIMARY | Deployed |
+| Base Sepolia | 84532 | PRIMARY | Deployed (Identity + Reputation) |
+| Base Mainnet | 8453 | PRODUCTION | Deployed (Identity + Reputation) |
+| Polygon Amoy | 80002 | LEGACY | Deployed (Full) |
 | Arc Testnet | 5042002 | PRIZE TARGET | Deploy ourselves |
-| Base Sepolia | 84532 | BACKUP | Deploy ourselves |
 
-### Contract Addresses (Polygon Amoy)
+### Contract Addresses (Base Sepolia - Primary)
+```
+IDENTITY_REGISTRY    = 0x8004A818BFB912233c491871b3d84c89A494BD9e
+REPUTATION_REGISTRY  = 0x8004B663056A597Dffe9eCcC1965A193B7388713
+RPC                  = https://sepolia.base.org
+BLOCK_EXPLORER       = https://sepolia.basescan.org
+```
+
+### Contract Addresses (Base Mainnet)
+```
+IDENTITY_REGISTRY    = 0x8004A169FB4a3325136EB29fA0ceB6D2e539a432
+REPUTATION_REGISTRY  = 0x8004BAa17C55a88189AE136b182e5fdA19dE9b63
+RPC                  = https://mainnet.base.org
+BLOCK_EXPLORER       = https://basescan.org
+```
+
+### Contract Addresses (Polygon Amoy - Legacy)
 ```
 IDENTITY_REGISTRY    = 0x8004ad19E14B9e0654f73353e8a0B600D46C2898
 REPUTATION_REGISTRY  = 0x8004B12F4C2B42d00c46479e859C92e39044C930
 VALIDATION_REGISTRY  = 0x8004C11C213ff7BaD36489bcBDF947ba5eee289B
+RPC                  = https://rpc-amoy.polygon.technology
+```
+
+### Yellow Network Configuration (Cross-chain)
+```
 YELLOW_CLEARNODE     = wss://clearnet-sandbox.yellow.com/ws
 YELLOW_CUSTODY       = 0x019B65A265EB3363822f2752141b3dF16131b262
 YELLOW_ADJUDICATOR   = 0x7c7ccbc98469190849BCC6c926307794fDfB11F2
