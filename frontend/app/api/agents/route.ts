@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isAddress } from 'viem';
+import { isAddress, type Address } from 'viem';
 import { db } from '@/lib/firebase';
-import { collection, doc, setDoc, query, where, getDocs } from 'firebase/firestore';
-import { getAgentId } from '@/lib/contracts/erc8004';
+import { collection, doc, setDoc, getDoc, updateDoc, query, where, getDocs } from 'firebase/firestore';
+import { getAgentId, publicClient } from '@/lib/contracts/erc8004';
+import { CONTRACTS } from '@/lib/contracts/addresses';
+import { IDENTITY_REGISTRY_ABI } from '@/lib/contracts/abis/identityRegistry';
 
 // POST /api/agents - Register a new agent
 export async function POST(request: NextRequest) {
@@ -154,6 +156,97 @@ export async function GET(request: NextRequest) {
     console.error('List agents error:', error);
     return NextResponse.json(
       { success: false, error: { code: 'SERVER_ERROR', message: 'Failed to list agents' } },
+      { status: 500 }
+    );
+  }
+}
+
+// PATCH /api/agents - Update agent with ERC-8004 ID after minting
+export async function PATCH(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { agentId, erc8004Id, wallet } = body;
+
+    // Validate input
+    if (!agentId || typeof agentId !== 'string') {
+      return NextResponse.json(
+        { success: false, error: { code: 'INVALID_AGENT_ID', message: 'Agent ID required' } },
+        { status: 400 }
+      );
+    }
+
+    if (!erc8004Id || typeof erc8004Id !== 'string') {
+      return NextResponse.json(
+        { success: false, error: { code: 'INVALID_ERC8004_ID', message: 'ERC-8004 ID required' } },
+        { status: 400 }
+      );
+    }
+
+    if (!wallet || !isAddress(wallet)) {
+      return NextResponse.json(
+        { success: false, error: { code: 'INVALID_WALLET', message: 'Valid wallet address required' } },
+        { status: 400 }
+      );
+    }
+
+    // Verify the wallet owns this NFT on-chain
+    try {
+      const owner = await publicClient.readContract({
+        address: CONTRACTS.IDENTITY_REGISTRY as Address,
+        abi: IDENTITY_REGISTRY_ABI,
+        functionName: 'ownerOf',
+        args: [BigInt(erc8004Id)],
+      });
+
+      if ((owner as string).toLowerCase() !== wallet.toLowerCase()) {
+        return NextResponse.json(
+          { success: false, error: { code: 'NOT_OWNER', message: 'Wallet does not own this NFT' } },
+          { status: 403 }
+        );
+      }
+    } catch (err) {
+      console.warn('Could not verify NFT ownership:', err);
+      // Continue anyway for mock mode / testnet issues
+    }
+
+    // Get the agent document
+    const agentRef = doc(db, 'agents', agentId);
+    const agentDoc = await getDoc(agentRef);
+
+    if (!agentDoc.exists()) {
+      return NextResponse.json(
+        { success: false, error: { code: 'AGENT_NOT_FOUND', message: 'Agent not found' } },
+        { status: 404 }
+      );
+    }
+
+    const agentData = agentDoc.data();
+
+    // Verify the wallet matches
+    if (agentData.walletAddress !== wallet.toLowerCase()) {
+      return NextResponse.json(
+        { success: false, error: { code: 'WALLET_MISMATCH', message: 'Wallet does not match agent' } },
+        { status: 403 }
+      );
+    }
+
+    // Update with ERC-8004 ID
+    await updateDoc(agentRef, {
+      erc8004Id,
+      updatedAt: Date.now(),
+    });
+
+    return NextResponse.json({
+      success: true,
+      agentId,
+      erc8004Id,
+      message: 'Agent updated with ERC-8004 identity',
+    });
+
+  } catch (error) {
+    console.error('Update agent error:', error);
+    return NextResponse.json(
+      { success: false, error: { code: 'SERVER_ERROR', message: 'Failed to update agent' } },
       { status: 500 }
     );
   }

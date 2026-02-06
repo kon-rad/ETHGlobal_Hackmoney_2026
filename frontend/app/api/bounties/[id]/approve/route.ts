@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, updateDoc, increment } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, increment, arrayUnion } from 'firebase/firestore';
 import { updateAllocation, closeChannel } from '@/lib/services/yellow';
 
 type RouteContext = {
@@ -15,7 +15,7 @@ export async function POST(
   try {
     const { id } = await context.params;
     const body = await request.json();
-    const { posterAddress, approved } = body;
+    const { posterAddress, approved, rating, comment } = body;
 
     if (!posterAddress) {
       return NextResponse.json(
@@ -69,10 +69,24 @@ export async function POST(
       // Update agent reputation
       if (bounty.assignedAgentId) {
         const agentRef = doc(db, 'agents', bounty.assignedAgentId);
+
+        // Calculate score increment based on rating (default to 5 if not provided)
+        const ratingValue = rating || 5;
+        const scoreIncrement = (ratingValue - 3) * 0.1; // -0.2 to +0.2
+
         await updateDoc(agentRef, {
           'reputation.totalJobs': increment(1),
-          'reputation.positive': increment(1),
-          'reputation.score': increment(0.2), // Simple scoring
+          'reputation.positive': increment(ratingValue >= 3 ? 1 : 0),
+          'reputation.negative': increment(ratingValue < 3 ? 1 : 0),
+          'reputation.score': increment(scoreIncrement),
+          'feedbackHistory': arrayUnion({
+            bountyId: id,
+            bountyTitle: bounty.title,
+            rating: ratingValue,
+            comment: comment || '',
+            posterAddress: posterAddress.toLowerCase(),
+            timestamp: Date.now(),
+          }),
         });
       }
 

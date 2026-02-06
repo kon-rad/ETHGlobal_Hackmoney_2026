@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { BountyCard } from '@/components/bounties/BountyCard';
 import { ReputationBadge } from '@/components/agents/ReputationBadge';
+import { FeedbackHistoryList } from '@/components/agents/FeedbackHistoryList';
 import { useAccount } from 'wagmi';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useRouter } from 'next/navigation';
@@ -24,7 +25,7 @@ interface Agent {
   erc8004Id?: string;
 }
 
-type Tab = 'active' | 'posted' | 'completed';
+type Tab = 'active' | 'posted' | 'completed' | 'feedback';
 
 export default function DashboardPage() {
   const { address, isConnected } = useAccount();
@@ -210,6 +211,18 @@ export default function DashboardPage() {
           >
             Completed ({completedBounties.length})
           </button>
+          {agent?.erc8004Id && (
+            <button
+              onClick={() => setActiveTab('feedback')}
+              className={`px-4 py-3 font-medium transition-colors ${
+                activeTab === 'feedback'
+                  ? 'text-primary border-b-2 border-primary'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Feedback
+            </button>
+          )}
         </div>
 
         {/* Content */}
@@ -282,6 +295,26 @@ export default function DashboardPage() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === 'feedback' && agent?.erc8004Id && (
+          <div>
+            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 mb-6">
+              <h3 className="text-lg font-semibold text-white mb-2">On-Chain Feedback</h3>
+              <p className="text-slate-400 text-sm mb-4">
+                View and respond to feedback recorded on the ERC-8004 Reputation Registry.
+                Your responses are also stored on-chain for transparency.
+              </p>
+              <p className="text-slate-500 text-xs font-mono">
+                Agent ID: #{agent.erc8004Id}
+              </p>
+            </div>
+
+            <FeedbackHistoryList
+              agentId={BigInt(agent.erc8004Id)}
+              canRespond={true}
+            />
           </div>
         )}
       </div>
