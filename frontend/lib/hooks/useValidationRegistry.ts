@@ -8,9 +8,12 @@
  * - Requesting validation from third-party validators
  * - Responding to validation requests (for validators)
  * - Reading validation status
+ *
+ * NOTE: Validation Registry is not deployed on all networks (e.g., Base Sepolia).
+ * These hooks will return errors when used on unsupported networks.
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   useWriteContract,
   useWaitForTransactionReceipt,
@@ -20,6 +23,10 @@ import { type Address } from 'viem';
 import { CONTRACTS } from '@/lib/contracts/addresses';
 import { VALIDATION_REGISTRY_ABI } from '@/lib/contracts/abis/validationRegistry';
 import { uploadToIPFS, computeHash } from '@/lib/services/ipfs';
+
+// Helper to check if validation registry is available
+const VALIDATION_REGISTRY_ADDRESS = CONTRACTS.VALIDATION_REGISTRY;
+const isValidationRegistryAvailable = VALIDATION_REGISTRY_ADDRESS !== null;
 
 // ============================================================================
 // Types
@@ -83,6 +90,10 @@ export function useValidationRequest() {
 
   const requestValidation = useCallback(
     async (params: ValidationRequestParams): Promise<void> => {
+      if (!isValidationRegistryAvailable || !VALIDATION_REGISTRY_ADDRESS) {
+        throw new Error('Validation Registry not available on current network');
+      }
+
       setUploadError(null);
       setRequestURI(null);
       resetWrite();
@@ -104,7 +115,7 @@ export function useValidationRequest() {
 
         // Call validationRequest on contract
         writeContract({
-          address: CONTRACTS.VALIDATION_REGISTRY as Address,
+          address: VALIDATION_REGISTRY_ADDRESS as Address,
           abi: VALIDATION_REGISTRY_ABI,
           functionName: 'validationRequest',
           args: [
@@ -137,6 +148,7 @@ export function useValidationRequest() {
     isConfirming,
     isConfirmed,
     error,
+    isAvailable: isValidationRegistryAvailable,
     reset: () => {
       setUploadError(null);
       setRequestURI(null);
@@ -168,6 +180,10 @@ export function useValidationResponse() {
 
   const respondToValidation = useCallback(
     async (params: ValidationResponseParams): Promise<void> => {
+      if (!isValidationRegistryAvailable || !VALIDATION_REGISTRY_ADDRESS) {
+        throw new Error('Validation Registry not available on current network');
+      }
+
       setUploadError(null);
       setResponseURI(null);
       resetWrite();
@@ -189,7 +205,7 @@ export function useValidationResponse() {
 
         // Call validationResponse on contract
         writeContract({
-          address: CONTRACTS.VALIDATION_REGISTRY as Address,
+          address: VALIDATION_REGISTRY_ADDRESS as Address,
           abi: VALIDATION_REGISTRY_ABI,
           functionName: 'validationResponse',
           args: [params.requestId, params.approved, uri, responseHash],
@@ -216,6 +232,7 @@ export function useValidationResponse() {
     isConfirming,
     isConfirmed,
     error,
+    isAvailable: isValidationRegistryAvailable,
     reset: () => {
       setUploadError(null);
       setResponseURI(null);
@@ -240,8 +257,11 @@ export function useCancelValidationRequest() {
 
   const cancelRequest = useCallback(
     (requestId: bigint) => {
+      if (!isValidationRegistryAvailable || !VALIDATION_REGISTRY_ADDRESS) {
+        throw new Error('Validation Registry not available on current network');
+      }
       writeContract({
-        address: CONTRACTS.VALIDATION_REGISTRY as Address,
+        address: VALIDATION_REGISTRY_ADDRESS as Address,
         abi: VALIDATION_REGISTRY_ABI,
         functionName: 'cancelValidationRequest',
         args: [requestId],
@@ -257,6 +277,7 @@ export function useCancelValidationRequest() {
     isConfirming,
     isConfirmed,
     error,
+    isAvailable: isValidationRegistryAvailable,
   };
 }
 
@@ -270,6 +291,10 @@ export function useValidationStatus(requestId: bigint | undefined) {
   const [error, setError] = useState<Error | null>(null);
 
   const fetchStatus = useCallback(async () => {
+    if (!isValidationRegistryAvailable || !VALIDATION_REGISTRY_ADDRESS) {
+      setError(new Error('Validation Registry not available on current network'));
+      return;
+    }
     if (requestId === undefined || !publicClient) return;
 
     setIsLoading(true);
@@ -277,7 +302,7 @@ export function useValidationStatus(requestId: bigint | undefined) {
 
     try {
       const result = await publicClient.readContract({
-        address: CONTRACTS.VALIDATION_REGISTRY as Address,
+        address: VALIDATION_REGISTRY_ADDRESS as Address,
         abi: VALIDATION_REGISTRY_ABI,
         functionName: 'getValidationStatus',
         args: [requestId],
@@ -319,6 +344,7 @@ export function useValidationStatus(requestId: bigint | undefined) {
     validation,
     isLoading,
     error,
+    isAvailable: isValidationRegistryAvailable,
     refetch: fetchStatus,
   };
 }
@@ -333,6 +359,10 @@ export function useAgentValidations(agentId: bigint | undefined) {
   const [error, setError] = useState<Error | null>(null);
 
   const fetchValidations = useCallback(async () => {
+    if (!isValidationRegistryAvailable || !VALIDATION_REGISTRY_ADDRESS) {
+      setError(new Error('Validation Registry not available on current network'));
+      return;
+    }
     if (agentId === undefined || !publicClient) return;
 
     setIsLoading(true);
@@ -340,7 +370,7 @@ export function useAgentValidations(agentId: bigint | undefined) {
 
     try {
       const result = await publicClient.readContract({
-        address: CONTRACTS.VALIDATION_REGISTRY as Address,
+        address: VALIDATION_REGISTRY_ADDRESS as Address,
         abi: VALIDATION_REGISTRY_ABI,
         functionName: 'getAgentValidations',
         args: [agentId],
@@ -362,6 +392,7 @@ export function useAgentValidations(agentId: bigint | undefined) {
     requestIds,
     isLoading,
     error,
+    isAvailable: isValidationRegistryAvailable,
     refetch: fetchValidations,
   };
 }
@@ -380,6 +411,10 @@ export function useHasValidation(
   const [error, setError] = useState<Error | null>(null);
 
   const checkValidation = useCallback(async () => {
+    if (!isValidationRegistryAvailable || !VALIDATION_REGISTRY_ADDRESS) {
+      setError(new Error('Validation Registry not available on current network'));
+      return;
+    }
     if (agentId === undefined || !validationType || !validator || !publicClient) return;
 
     setIsLoading(true);
@@ -387,7 +422,7 @@ export function useHasValidation(
 
     try {
       const result = await publicClient.readContract({
-        address: CONTRACTS.VALIDATION_REGISTRY as Address,
+        address: VALIDATION_REGISTRY_ADDRESS as Address,
         abi: VALIDATION_REGISTRY_ABI,
         functionName: 'hasValidation',
         args: [agentId, validationType, validator],
@@ -409,6 +444,7 @@ export function useHasValidation(
     hasValidation,
     isLoading,
     error,
+    isAvailable: isValidationRegistryAvailable,
     refetch: checkValidation,
   };
 }
@@ -423,6 +459,10 @@ export function usePendingValidationRequests(validator: Address | undefined) {
   const [error, setError] = useState<Error | null>(null);
 
   const fetchPending = useCallback(async () => {
+    if (!isValidationRegistryAvailable || !VALIDATION_REGISTRY_ADDRESS) {
+      setError(new Error('Validation Registry not available on current network'));
+      return;
+    }
     if (!validator || !publicClient) return;
 
     setIsLoading(true);
@@ -430,7 +470,7 @@ export function usePendingValidationRequests(validator: Address | undefined) {
 
     try {
       const result = await publicClient.readContract({
-        address: CONTRACTS.VALIDATION_REGISTRY as Address,
+        address: VALIDATION_REGISTRY_ADDRESS as Address,
         abi: VALIDATION_REGISTRY_ABI,
         functionName: 'getPendingRequests',
         args: [validator],
@@ -452,6 +492,10 @@ export function usePendingValidationRequests(validator: Address | undefined) {
     requestIds,
     isLoading,
     error,
+    isAvailable: isValidationRegistryAvailable,
     refetch: fetchPending,
   };
 }
+
+// Export availability check
+export { isValidationRegistryAvailable };
