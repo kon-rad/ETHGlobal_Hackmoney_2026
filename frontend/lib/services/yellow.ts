@@ -39,6 +39,9 @@ import { getSDKMessageSigner, getServerAddress } from './yellow-signer';
 // Import Custody ABI from Nitrolite SDK
 import { CustodyAbi } from '@erc7824/nitrolite/dist/abis/custody';
 
+// Import state utilities for proper state hash computation
+import { getStateHash, getPackedState } from '@erc7824/nitrolite/dist/utils/state';
+
 // Viem imports for on-chain operations
 import {
   type Address,
@@ -47,6 +50,8 @@ import {
   type Hex,
   parseUnits,
   formatUnits,
+  keccak256,
+  encodeAbiParameters,
 } from 'viem';
 
 // Configuration from environment variables
@@ -162,6 +167,44 @@ const ERC20_ABI = [
   },
 ] as const;
 
+// Token decimal cache to avoid repeated queries
+const tokenDecimalCache = new Map<string, number>();
+
+/**
+ * Get token decimals from contract
+ * Results are cached to avoid repeated queries
+ */
+async function getTokenDecimals(
+  publicClient: PublicClient,
+  tokenAddress: Address
+): Promise<number> {
+  // Check cache first
+  const cached = tokenDecimalCache.get(tokenAddress.toLowerCase());
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  // Query from contract
+  try {
+    const decimals = await publicClient.readContract({
+      address: tokenAddress,
+      abi: ERC20_ABI,
+      functionName: 'decimals',
+    });
+
+    const decimalsNum = Number(decimals);
+    tokenDecimalCache.set(tokenAddress.toLowerCase(), decimalsNum);
+
+    console.log(`[Yellow] Token ${tokenAddress} has ${decimalsNum} decimals`);
+    return decimalsNum;
+  } catch (error) {
+    console.error(`[Yellow] Failed to query token decimals for ${tokenAddress}:`, error);
+    // Default to 18 for unknown tokens (safest assumption)
+    console.warn(`[Yellow] Defaulting to 18 decimals for token ${tokenAddress}`);
+    return 18;
+  }
+}
+
 /**
  * Check current token allowance for Yellow Custody contract
  */
@@ -235,7 +278,7 @@ async function approveToken(params: TokenApprovalParams): Promise<string> {
 
 /**
  * Sign a state for Yellow Network state channel
- * Uses EIP-191 personal sign over the state hash
+ * Uses proper state hash format expected by Custody.create()
  */
 async function signChannelState(
   walletClient: WalletClient,
@@ -251,23 +294,24 @@ async function signChannelState(
     throw new Error('Wallet account required for signing');
   }
 
-  // Create state hash for signing
+  // Create proper state hash using Nitrolite SDK utility
+  // This matches the format expected by Custody.create()
   // Format: keccak256(abi.encodePacked(channelId, intent, version, data, allocations))
-  const stateMessage = JSON.stringify({
-    channelId,
+  const stateHash = getStateHash(channelId as Hex, {
     intent: state.intent,
-    version: state.version.toString(),
-    data: state.data,
+    version: state.version,
+    data: state.data as Hex,
     allocations: state.allocations.map(a => ({
-      destination: a.destination,
-      token: a.token,
-      amount: a.amount.toString(),
+      destination: a.destination as Address,
+      token: a.token as Address,
+      amount: a.amount,
     })),
   });
 
+  // Sign the raw state hash (not a personal message)
   const signature = await walletClient.signMessage({
     account: walletClient.account,
-    message: stateMessage,
+    message: { raw: stateHash },  // Use raw hash, not personal message format
   });
 
   return signature;
@@ -776,8 +820,13 @@ export async function openChannel(params: OpenChannelParams): Promise<OpenChanne
     const tokenAddress = (token || YELLOW_CONFIG.TEST_USD) as Address;
     const custodyAddress = YELLOW_CONFIG.CUSTODY as Address;
 
-    // Step 1: Approve token spending
-    const depositAmount = parseUnits(deposit.toString(), 18); // Yellow Test USD uses 18 decimals
+    // Query token decimals before parsing amount
+    const tokenDecimals = await getTokenDecimals(publicClient, tokenAddress);
+    console.log(`[Yellow] Token ${tokenAddress} uses ${tokenDecimals} decimals`);
+
+    // Step 1: Approve token spending with correct decimals
+    const depositAmount = parseUnits(deposit.toString(), tokenDecimals);
+    console.log(`[Yellow] Parsed amount: ${deposit} tokens = ${depositAmount.toString()} wei`);
 
     console.log(`[Yellow] Step 1: Approving ${deposit} tokens...`);
     const approvalTxHash = await approveToken({
@@ -801,16 +850,53 @@ export async function openChannel(params: OpenChannelParams): Promise<OpenChanne
     const channelId = createChannelResponse.channel_id;
     console.log(`[Yellow] Channel created: ${channelId}`);
 
+    // Extract channel metadata from ClearNode response
+    // ClearNode returns the canonical channel parameters that will be used on-chain
+    const clearnodeParticipant = createChannelResponse.participant ||
+                                 createChannelResponse.clearnode_address ||
+                                 createChannelResponse.server_address;
+
+    if (!clearnodeParticipant) {
+      console.error('[Yellow] ClearNode response missing participant address:', createChannelResponse);
+      throw new Error('ClearNode response missing participant address - cannot create channel');
+    }
+
+    const adjudicator = createChannelResponse.adjudicator || YELLOW_CONFIG.ADJUDICATOR;
+    const challenge = createChannelResponse.challenge !== undefined
+      ? BigInt(createChannelResponse.challenge)
+      : BigInt(3600);  // 1 hour default
+    const nonce = createChannelResponse.nonce !== undefined
+      ? BigInt(createChannelResponse.nonce)
+      : BigInt(Date.now());
+
+    // Log extracted metadata for debugging
+    console.log('[Yellow] Channel metadata extracted from ClearNode:');
+    console.log(`  - Participants: [${poster}, ${clearnodeParticipant}]`);
+    console.log(`  - Adjudicator: ${adjudicator}`);
+    console.log(`  - Challenge period: ${challenge.toString()}s`);
+    console.log(`  - Nonce: ${nonce.toString()}`);
+
+    // Warn if using fallback values
+    if (!createChannelResponse.adjudicator) {
+      console.warn('[Yellow] Using fallback adjudicator address - may cause channelId mismatch');
+    }
+    if (createChannelResponse.challenge === undefined) {
+      console.warn('[Yellow] Using fallback challenge period - may cause channelId mismatch');
+    }
+    if (createChannelResponse.nonce === undefined) {
+      console.warn('[Yellow] Using fallback nonce - may cause channelId mismatch');
+    }
+
     // Store channel metadata for later use in Custody.create()
     const channelMetadata: ChannelMetadata = {
-      channelId: createChannelResponse.channel_id || createChannelResponse.channelId,
+      channelId: channelId,
       participants: [
         poster.toLowerCase(),
-        createChannelResponse.participant || YELLOW_CONFIG.CUSTODY,  // ClearNode participant
+        clearnodeParticipant.toLowerCase(),
       ] as [string, string],
-      adjudicator: YELLOW_CONFIG.ADJUDICATOR,
-      challenge: BigInt(3600),  // 1 hour default
-      nonce: BigInt(Date.now()),
+      adjudicator: adjudicator,
+      challenge: challenge,
+      nonce: nonce,
     };
     channelMetadataCache.set(channelMetadata.channelId, channelMetadata);
 
@@ -913,12 +999,21 @@ export async function updateAllocation(
   try {
     console.log(`[Yellow] Updating allocation for channel ${channelId}...`);
 
-    // Convert allocation to SDK format (amounts in smallest unit - 6 decimals for USDC)
+    // Note: We need publicClient to query decimals, but it's not available in this function
+    // For now, use 6 decimals for USDC (will be fixed in future refactor)
+    // TODO: Add publicClient parameter or pass decimals from caller
+
+    // Convert allocation to SDK format (amounts in smallest unit)
+    const tokenAddress = YELLOW_CONFIG.BASE_USDC as Address;
+    // Hardcoded to 6 decimals for USDC - this is correct for Base USDC
+    // In future, should query decimals or accept as parameter
+    const decimals = 6;
+
     const allocations = Object.entries(newAllocation).map(
       ([participant, amount]) => ({
         participant: participant as Address,
-        asset: YELLOW_CONFIG.BASE_USDC as Address,
-        amount: BigInt(Math.round(amount * 1e6)).toString(),
+        asset: tokenAddress,
+        amount: BigInt(Math.round(amount * 10 ** decimals)).toString(),
       })
     );
 
@@ -1081,7 +1176,13 @@ export async function openChannelWithSDK(params: {
     console.log(`[Yellow] Channel created: ${channelId}`);
 
     // Step 3: Create signed resize message to deposit funds
-    const depositAmount = BigInt(Math.round(params.deposit * 1e6)); // USDC has 6 decimals
+    // Note: This function doesn't have publicClient access, so we use 6 decimals for USDC
+    // This is correct for Base USDC on mainnet (0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913)
+    const tokenAddressForDecimals = (params.token || YELLOW_CONFIG.BASE_USDC) as Address;
+    const decimals = 6; // USDC standard - should query in future if supporting other tokens
+    const depositAmount = BigInt(Math.round(params.deposit * 10 ** decimals));
+    console.log(`[Yellow] Deposit amount: ${params.deposit} USDC = ${depositAmount.toString()} wei`);
+
     const resizeMsg = await createResizeChannelMessage(signer, {
       channel_id: channelId as Hex,
       allocate_amount: depositAmount,
