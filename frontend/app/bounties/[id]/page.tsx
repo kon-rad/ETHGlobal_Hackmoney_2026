@@ -5,8 +5,10 @@ import { Navbar } from '@/components/Navbar';
 import { BountyStatusBadge } from '@/components/bounties/BountyStatusBadge';
 import { ClaimBountyButton } from '@/components/bounties/ClaimBountyButton';
 import { SubmitWorkForm } from '@/components/bounties/SubmitWorkForm';
+import { RatingInput } from '@/components/bounties/RatingInput';
 import { useAccount } from 'wagmi';
 import { useRouter } from 'next/navigation';
+import { useGiveFeedback } from '@/lib/hooks/useReputationRegistry';
 
 interface Bounty {
   id: string;
@@ -18,6 +20,7 @@ interface Bounty {
   posterAddress: string;
   assignedAgentId?: string;
   assignedAgentAddress?: string;
+  assignedAgentErc8004Id?: string;
   requiredSkills: string[];
   requirements?: string;
   createdAt: number;
@@ -35,6 +38,17 @@ export default function BountyDetailPage({ params }: { params: Promise<{ id: str
   const [bounty, setBounty] = useState<Bounty | null>(null);
   const [loading, setLoading] = useState(true);
   const [agentId, setAgentId] = useState<string | null>(null);
+  const [rating, setRating] = useState(5);
+  const [comment, setComment] = useState('');
+  const [isApproving, setIsApproving] = useState(false);
+
+  const {
+    giveFeedback,
+    isPending: isFeedbackPending,
+    isConfirming: isFeedbackConfirming,
+    isConfirmed: isFeedbackConfirmed,
+    error: feedbackError,
+  } = useGiveFeedback();
 
   useEffect(() => {
     fetchBounty();
@@ -68,11 +82,40 @@ export default function BountyDetailPage({ params }: { params: Promise<{ id: str
   }
 
   async function handleApprove(approved: boolean) {
+    if (!bounty) return;
+
+    setIsApproving(true);
+
     try {
+      // If approving and agent has ERC-8004 ID, submit on-chain feedback
+      if (approved && bounty.assignedAgentErc8004Id) {
+        try {
+          await giveFeedback({
+            agentId: BigInt(bounty.assignedAgentErc8004Id),
+            rating,
+            comment,
+            bountyId: bounty.id,
+            bountyTitle: bounty.title,
+            tag1: 'bounty',
+            tag2: 'clawork',
+            deliverableCID: bounty.deliverableCID,
+          });
+        } catch (err) {
+          console.warn('On-chain feedback failed, continuing with API approval:', err);
+          // Continue with API approval even if on-chain feedback fails
+        }
+      }
+
+      // Call API to approve/reject and process payment
       const res = await fetch(`/api/bounties/${id}/approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ posterAddress: address, approved }),
+        body: JSON.stringify({
+          posterAddress: address,
+          approved,
+          rating: approved ? rating : undefined,
+          comment: approved ? comment : undefined,
+        }),
       });
       const data = await res.json();
       if (data.success) {
@@ -80,6 +123,8 @@ export default function BountyDetailPage({ params }: { params: Promise<{ id: str
       }
     } catch (error) {
       console.error('Failed to approve:', error);
+    } finally {
+      setIsApproving(false);
     }
   }
 
@@ -175,16 +220,64 @@ export default function BountyDetailPage({ params }: { params: Promise<{ id: str
           {bounty.status === 'SUBMITTED' && isPoster && (
             <div className="space-y-4">
               <h3 className="text-lg font-semibold text-white">Review Submission</h3>
+
+              {/* Rating Section */}
+              <div className="bg-slate-900/50 border border-slate-600 rounded-lg p-4">
+                <label className="block text-sm font-medium text-slate-300 mb-3">
+                  Rate the agent&apos;s work
+                </label>
+                <RatingInput value={rating} onChange={setRating} />
+
+                <label className="block text-sm font-medium text-slate-300 mt-4 mb-2">
+                  Comment (optional)
+                </label>
+                <textarea
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  placeholder="Share your feedback..."
+                  rows={3}
+                  className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-white placeholder-slate-500 focus:border-primary focus:outline-none resize-none"
+                />
+
+                {bounty.assignedAgentErc8004Id && (
+                  <p className="text-slate-500 text-xs mt-2">
+                    This feedback will be recorded on-chain via ERC-8004
+                  </p>
+                )}
+              </div>
+
+              {/* Status indicators */}
+              {(isFeedbackPending || isFeedbackConfirming) && (
+                <div className="flex items-center gap-3 text-yellow-400">
+                  <div className="w-4 h-4 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
+                  <span>{isFeedbackConfirming ? 'Confirming feedback...' : 'Submitting feedback...'}</span>
+                </div>
+              )}
+
+              {feedbackError && (
+                <p className="text-red-400 text-sm">{feedbackError.message}</p>
+              )}
+
               <div className="flex gap-4">
                 <button
                   onClick={() => handleApprove(true)}
-                  className="flex-1 bg-primary text-background-dark px-6 py-3 rounded-lg font-bold hover:opacity-90"
+                  disabled={isApproving || isFeedbackPending || isFeedbackConfirming}
+                  className={`flex-1 px-6 py-3 rounded-lg font-bold transition-opacity ${
+                    isApproving || isFeedbackPending || isFeedbackConfirming
+                      ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                      : 'bg-primary text-background-dark hover:opacity-90'
+                  }`}
                 >
-                  Approve & Pay
+                  {isApproving ? 'Processing...' : 'Approve & Pay'}
                 </button>
                 <button
                   onClick={() => handleApprove(false)}
-                  className="flex-1 bg-red-600 text-white px-6 py-3 rounded-lg font-bold hover:opacity-90"
+                  disabled={isApproving || isFeedbackPending || isFeedbackConfirming}
+                  className={`flex-1 px-6 py-3 rounded-lg font-bold transition-opacity ${
+                    isApproving || isFeedbackPending || isFeedbackConfirming
+                      ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                      : 'bg-red-600 text-white hover:opacity-90'
+                  }`}
                 >
                   Reject
                 </button>
