@@ -18,10 +18,6 @@
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-<<<<<<< HEAD
-    "viem": "^2.45.1",
-    "wagmi": "^3.4.2"
-=======
     "reading-time": "^1.5.0",
     "rehype-autolink-headings": "^7.1.0",
     "rehype-highlight": "^7.0.2",
@@ -30,8 +26,9 @@
     "remark": "^15.0.1",
     "remark-gfm": "^4.0.1",
     "remark-html": "^16.0.1",
-    "remark-rehype": "^11.1.2"
->>>>>>> 373b079385ad0ef586a78c6c884cf75cc6763ea5
+    "remark-rehype": "^11.1.2",
+    "viem": "^2.45.1",
+    "wagmi": "^3.4.2"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
