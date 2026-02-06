@@ -40,5 +40,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-docs/Clawork_PRD_*
+# docs
+docs/Clawork_PRD_v1.0.pdf
 docs/Clawork_Architecture_v1.md
+docs/Clawork_PRD_*

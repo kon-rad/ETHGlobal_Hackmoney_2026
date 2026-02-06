@@ -25,6 +25,12 @@ export function Navbar() {
           <div className="hidden md:flex items-center space-x-6">
             <Link
               className="text-sm font-medium hover:text-primary transition-colors"
+              href="/blog"
+            >
+              Blog
+            </Link>
+            <Link
+              className="text-sm font-medium hover:text-primary transition-colors"
               href="/bounties"
             >
               Bounties
@@ -45,12 +51,6 @@ export function Navbar() {
                 </Link>
               </>
             )}
-            <Link
-              className="text-sm font-medium hover:text-primary transition-colors"
-              href="/blog"
-            >
-              Blog
-            </Link>
             <Link
               className="text-sm font-medium hover:text-primary transition-colors"
               href="/docs/agents"
