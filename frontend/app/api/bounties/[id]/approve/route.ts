@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, updateDoc, increment, arrayUnion } from 'firebase/firestore';
-import { updateAllocation, closeChannel } from '@/lib/services/yellow';
+import { updateAllocation, closeChannel, MOCK_MODE } from '@/lib/services/yellow';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -52,18 +52,38 @@ export async function POST(
 
     if (approved) {
       // Transfer funds to agent via Yellow channel
+      let settlementTxHash: string | null = null;
+
       if (bounty.yellowChannelId) {
-        await updateAllocation(bounty.yellowChannelId, {
-          [bounty.assignedAgentAddress]: bounty.reward,
-          [bounty.posterAddress]: 0,
-        });
-        await closeChannel(bounty.yellowChannelId);
+        try {
+          console.log(`[Approve] Processing payment for bounty ${id} via Yellow channel ${bounty.yellowChannelId}`);
+          console.log(`[Approve] Mode: ${MOCK_MODE ? 'MOCK' : 'PRODUCTION'}`);
+
+          // Update allocation: transfer full reward to agent
+          await updateAllocation(bounty.yellowChannelId, {
+            [bounty.assignedAgentAddress]: bounty.reward,
+            [bounty.posterAddress]: 0,
+          });
+
+          // Close channel and settle on-chain
+          const { txHash } = await closeChannel(bounty.yellowChannelId);
+          settlementTxHash = txHash || null;
+
+          console.log(`[Approve] Payment settled for bounty ${id}. TxHash: ${txHash || 'none (mock mode)'}`);
+        } catch (paymentError) {
+          // Log error but don't fail the approval - funds can be settled manually later
+          console.error(`[Approve] Payment settlement failed for bounty ${id}:`, paymentError);
+          console.warn(`[Approve] Bounty ${id} will be marked complete but settlement may need manual intervention`);
+        }
+      } else {
+        console.log(`[Approve] No Yellow channel for bounty ${id}, skipping payment settlement`);
       }
 
-      // Update bounty status
+      // Update bounty status with settlement info
       await updateDoc(bountyRef, {
         status: 'COMPLETED',
         completedAt: Date.now(),
+        ...(settlementTxHash && { settlementTxHash }),
       });
 
       // Update agent reputation

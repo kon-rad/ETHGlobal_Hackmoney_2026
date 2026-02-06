@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isAddress } from 'viem';
+import { isAddress, createPublicClient, createWalletClient, http, type WalletClient, type PublicClient } from 'viem';
 import { db } from '@/lib/firebase';
 import { collection, doc, setDoc, getDocs } from 'firebase/firestore';
 import { openChannel } from '@/lib/services/yellow';
+import { getPaymentToken, CHAIN_CONFIG, type SupportedNetwork } from '@/lib/contracts/addresses';
 import type { Bounty, CreateBountyInput, BountyStatus, BountyType } from '@/lib/types/bounty';
 
 // Default deadline: 3 days for submission
@@ -88,20 +89,48 @@ export async function POST(request: NextRequest) {
     // Open Yellow Network channel for the bounty
     let yellowChannelId: string | undefined;
     let yellowSessionId: string | undefined;
+    let channelTxHash: string | undefined;
 
     try {
-      // For now, we'll use mock mode or skip if no signer available
-      // In production, this would require the poster to sign
+      // Extract wallet and chain info from headers (if provided by frontend)
+      // In a real implementation, the frontend would send these as part of the request
+      // For now, we'll detect if we're in production mode and skip if no wallet clients
+      const walletClientProvided = request.headers.get('x-wallet-client');
+      const chainIdHeader = request.headers.get('x-chain-id');
+      const network = (chainIdHeader === '8453' ? 'base' : chainIdHeader === '84532' ? 'baseSepolia' : 'baseSepolia') as SupportedNetwork;
+
+      // Get token address for the network
+      const tokenAddress = getPaymentToken(network);
+
+      let walletClient: WalletClient | undefined;
+      let publicClient: PublicClient | undefined;
+
+      // In production mode, wallet/public clients would be provided
+      // For API routes, this requires the frontend to handle signing
+      // and pass the signed transactions back
+      if (walletClientProvided) {
+        // This is a placeholder - in reality, the frontend handles wallet operations
+        // and the API just coordinates the Yellow Network RPC calls
+        console.log('[Bounty API] Wallet client detected, using production mode');
+      }
+
       const channelResult = await openChannel({
         poster: posterAddress,
         agent: '0x0000000000000000000000000000000000000000', // Placeholder until claimed
         deposit: reward,
-        token: rewardToken,
+        token: tokenAddress,
+        chainId: CHAIN_CONFIG[network].chainId,
+        walletClient,
+        publicClient,
       });
+
       yellowChannelId = channelResult.channelId;
       yellowSessionId = channelResult.sessionId;
+      channelTxHash = channelResult.txHash;
+
+      console.log(`[Bounty API] Yellow channel created: ${yellowChannelId}`);
     } catch (err) {
-      console.warn('Yellow channel creation skipped (mock mode or error):', err);
+      console.warn('[Bounty API] Yellow channel creation skipped (mock mode or error):', err);
       // Continue without channel - will be created on claim
     }
 
@@ -129,8 +158,9 @@ export async function POST(request: NextRequest) {
       success: true,
       bountyId,
       bounty,
+      channelTxHash,
       message: yellowChannelId
-        ? 'Bounty created with Yellow Network channel!'
+        ? `Bounty created with Yellow Network channel! ${channelTxHash ? `Tx: ${channelTxHash}` : ''}`
         : 'Bounty created! Yellow channel will be opened when an agent claims.',
     });
 

@@ -90,25 +90,25 @@ npm run build    # Production build
 
 | Network | Chain ID | Role | ERC-8004 |
 |---------|----------|------|----------|
-| Base Sepolia | 84532 | PRIMARY | Deployed (Identity + Reputation) |
-| Base Mainnet | 8453 | PRODUCTION | Deployed (Identity + Reputation) |
+| Base Mainnet | 8453 | PRIMARY | Deployed (Identity + Reputation) |
+| Base Sepolia | 84532 | TESTNET | Deployed (Identity + Reputation) |
 | Polygon Amoy | 80002 | LEGACY | Deployed (Full) |
 | Arc Testnet | 5042002 | PRIZE TARGET | Deploy ourselves |
 
-### Contract Addresses (Base Sepolia - Primary)
-```
-IDENTITY_REGISTRY    = 0x8004A818BFB912233c491871b3d84c89A494BD9e
-REPUTATION_REGISTRY  = 0x8004B663056A597Dffe9eCcC1965A193B7388713
-RPC                  = https://sepolia.base.org
-BLOCK_EXPLORER       = https://sepolia.basescan.org
-```
-
-### Contract Addresses (Base Mainnet)
+### Contract Addresses (Base Mainnet - Primary)
 ```
 IDENTITY_REGISTRY    = 0x8004A169FB4a3325136EB29fA0ceB6D2e539a432
 REPUTATION_REGISTRY  = 0x8004BAa17C55a88189AE136b182e5fdA19dE9b63
 RPC                  = https://mainnet.base.org
 BLOCK_EXPLORER       = https://basescan.org
+```
+
+### Contract Addresses (Base Sepolia - Testnet)
+```
+IDENTITY_REGISTRY    = 0x8004A818BFB912233c491871b3d84c89A494BD9e
+REPUTATION_REGISTRY  = 0x8004B663056A597Dffe9eCcC1965A193B7388713
+RPC                  = https://sepolia.base.org
+BLOCK_EXPLORER       = https://sepolia.basescan.org
 ```
 
 ### Contract Addresses (Polygon Amoy - Legacy)

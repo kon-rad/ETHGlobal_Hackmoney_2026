@@ -9,7 +9,8 @@
  */
 
 import { privateKeyToAccount } from 'viem/accounts';
-import { type Account } from 'viem';
+import { type Account, type Hex } from 'viem';
+import { createECDSAMessageSigner, type MessageSigner } from '@erc7824/nitrolite';
 
 /**
  * Get a server-side signer function for Yellow Network operations
@@ -87,4 +88,30 @@ async function mockSigner(message: string): Promise<string> {
  */
 export function isServerSignerConfigured(): boolean {
   return !!process.env.YELLOW_SERVER_PRIVATE_KEY;
+}
+
+/**
+ * Get an SDK-compatible MessageSigner for Yellow Network operations
+ *
+ * This creates a signer using the Nitrolite SDK's createECDSAMessageSigner
+ * which is required for signing channel operations (create, resize, close).
+ *
+ * The SDK MessageSigner type is: (payload: RPCData) => Promise<Hex>
+ * This differs from the legacy getServerSigner() which returns (message: string) => Promise<string>
+ */
+export function getSDKMessageSigner(): MessageSigner | null {
+  const privateKey = process.env.YELLOW_SERVER_PRIVATE_KEY;
+
+  if (!privateKey) {
+    console.warn('[Yellow] YELLOW_SERVER_PRIVATE_KEY not set, SDK signer unavailable');
+    return null;
+  }
+
+  try {
+    // The SDK expects a Hex private key and returns a properly typed MessageSigner
+    return createECDSAMessageSigner(privateKey as Hex);
+  } catch (error) {
+    console.error('[Yellow] Failed to create SDK message signer:', error);
+    return null;
+  }
 }

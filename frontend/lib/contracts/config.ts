@@ -15,15 +15,15 @@ const BASE_SEPOLIA_RPC = process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC || 'https://se
 const BASE_RPC = process.env.NEXT_PUBLIC_BASE_RPC || 'https://mainnet.base.org';
 
 // Wagmi config with RainbowKit (client-only)
-// Base Sepolia is primary for ERC-8004, with fallbacks to other networks
+// Base Mainnet is primary for ERC-8004, with fallbacks to other networks
 export const wagmiConfig = getDefaultConfig({
   appName: 'Clawork',
   projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'demo',
-  chains: [baseSepolia, base, sepolia, polygonAmoy],
+  chains: [base, baseSepolia, sepolia, polygonAmoy],
   ssr: true,
   transports: {
-    [baseSepolia.id]: http(BASE_SEPOLIA_RPC),
     [base.id]: http(BASE_RPC),
+    [baseSepolia.id]: http(BASE_SEPOLIA_RPC),
     [sepolia.id]: http(SEPOLIA_RPC),
     [polygonAmoy.id]: http(POLYGON_AMOY_RPC),
   },

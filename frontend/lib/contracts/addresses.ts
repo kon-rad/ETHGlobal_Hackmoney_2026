@@ -27,7 +27,7 @@ export const ERC8004_CONTRACTS = {
 } as const;
 
 // Default network for the application
-export const DEFAULT_NETWORK: SupportedNetwork = 'baseSepolia';
+export const DEFAULT_NETWORK: SupportedNetwork = 'base';
 
 // Legacy export for backward compatibility (uses default network)
 export const CONTRACTS = ERC8004_CONTRACTS[DEFAULT_NETWORK];
@@ -37,13 +37,42 @@ export function getContractsForNetwork(network: SupportedNetwork) {
   return ERC8004_CONTRACTS[network];
 }
 
-// Yellow Network addresses (for future integration)
+// Yellow Network addresses
 export const YELLOW = {
-  CLEARNODE: 'wss://clearnet-sandbox.yellow.com/ws',
+  // ClearNode WebSocket endpoints
+  CLEARNODE_SANDBOX: 'wss://clearnet-sandbox.yellow.com/ws',
+  CLEARNODE_PRODUCTION: 'wss://clearnet.yellow.com/ws',
+  // Use environment variable or default to sandbox
+  CLEARNODE: process.env.NEXT_PUBLIC_YELLOW_CLEARNODE || 'wss://clearnet-sandbox.yellow.com/ws',
+
+  // Yellow Network Contracts (cross-chain)
   CUSTODY: '0x019B65A265EB3363822f2752141b3dF16131b262' as const,
   ADJUDICATOR: '0x7c7ccbc98469190849BCC6c926307794fDfB11F2' as const,
+
+  // Test token (sandbox only)
   TEST_USD: '0xDB9F293e3898c9E5536A3be1b0C56c89d2b32DEb' as const,
 };
+
+// Stablecoin addresses per network (for Yellow Network payments)
+export const STABLECOINS = {
+  // Base Mainnet - Circle's official USDC
+  base: {
+    USDC: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as const,
+  },
+  // Base Sepolia - Yellow Test USD for sandbox
+  baseSepolia: {
+    USDC: '0xDB9F293e3898c9E5536A3be1b0C56c89d2b32DEb' as const, // Yellow Test USD
+  },
+  // Polygon Amoy - Yellow Test USD for sandbox
+  polygonAmoy: {
+    USDC: '0xDB9F293e3898c9E5536A3be1b0C56c89d2b32DEb' as const, // Yellow Test USD
+  },
+} as const;
+
+// Helper to get payment token for a network
+export function getPaymentToken(network: SupportedNetwork): `0x${string}` {
+  return STABLECOINS[network].USDC;
+}
 
 // Chain configurations
 export const CHAIN_CONFIG = {
